@@ -205,6 +205,27 @@ throughput while `params` drives memory.
   as a total; their weights are estimates. B300 and RTX PRO 6000 node figures are
   stated directly in the elevations.
 
+## Optics and cabling
+
+The results page carries a transceiver, fibre and copper BOM with NVIDIA part
+numbers, derived from the design's own port totals using the per-link ratios in
+NVIDIA RA-11337-001 Table 9.1. Feeding that document's own 4 SU / 256-node
+configuration back into the model reproduces its quantities exactly:
+
+| 2,048 compute ports | Model | NVIDIA |
+|---|---|---|
+| Node-side 800G transceivers | 2,048 | 2,048 |
+| Twin-port transceivers, leaf to node | 2,048 | 2,048 |
+| Node-leaf fibre | 4,096 | 4,096 |
+| Twin-port transceivers, leaf to spine | 4,096 | 4,096 |
+| Leaf-spine fibre | 4,096 | 4,096 |
+
+Cable counts are double the port counts because a twin-port OSFP cage carries two
+links. Ethernet (F4) part variants are listed since the tool builds a Spectrum
+fabric, with the InfiniBand equivalents named alongside. Cable *lengths* are not
+sized — the listed fibre is the RA's 30 m part, and a real order needs a length
+schedule from the floor plan.
+
 ## Rack elevations
 
 `rack.html` turns the sized cluster into to-scale front and rear rack elevations,

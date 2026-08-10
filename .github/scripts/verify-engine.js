@@ -223,6 +223,29 @@ console.log('\nWEKApod against WEKA published configurations');
   if (!ok) failures++;
 }
 
+console.log('\nOptics and cabling against NVIDIA RA-11337-001 Table 9.1');
+{
+  // The RA sizes a 4 SU / 256-node SuperPOD: 2,048 compute ports giving 2,048
+  // node transceivers, 2,048 twin-port switch transceivers and 4,096 fibres.
+  const node = GPU_NODES['dgx-b300'];
+  const fac = sizeFacility({ gpuNodes: 256, nodeKey: 'dgx-b300', coolingKey: 'air', profileKey: 'core', storageNodes: 32, storagePodKey: 'nitro-155' });
+  const weka = sizeWekapod({ podKey: 'nitro-155', nodes: 32 });
+  const bom = cablingBOM({ fac, node, gpuNodes: 256, weka });
+  const cf = bom.rows.filter((r) => r.group.startsWith('Compute'));
+  const pick = (pn, note) => cf.filter((r) => r.spec.pn === pn && (note ? r.note === note : true))
+    .reduce((a, r) => a + r.qty, 0);
+  check('compute fabric node ports', bom.ports.ewPorts, 2048, 0, ' ports');
+  check('node-side 800G transceivers', pick('980-9I51A-00NS00'), 2048, 0);
+  check('twin-port transceivers, leaf to node', pick('980-9I510-F4NS00', 'leaf side, node-facing'), 2048, 0);
+  check('node-leaf fibre', pick('980-9I570-00N030', 'node to leaf'), 4096, 0);
+  check('twin-port transceivers, leaf to spine', pick('980-9I510-F4NS00', 'leaf to spine'), 4096, 0);
+  check('leaf-spine fibre', pick('980-9I570-00N030', 'leaf to spine'), 4096, 0);
+  // Every line must carry a real part number.
+  const missing = bom.rows.filter((r) => !r.spec || !r.spec.pn).length;
+  console.log(`  ${missing ? 'FAIL' : 'PASS'}  all ${bom.rows.length} cabling lines carry a part number`);
+  failures += missing;
+}
+
 console.log('\nInference engine — memory arithmetic');
 {
   const m = MODELS['llama31-70b'];

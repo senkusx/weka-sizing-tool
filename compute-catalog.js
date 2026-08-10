@@ -232,6 +232,41 @@ const WEKAPODS = {
    net-capacity formula at that setting. */
 const WEKAPOD_DEFAULTS = { schemeId: '5+2', hotSpares: 1, minNodes: 8 };
 
+/* ---------- optics and cabling ----------
+   Part numbers and per-link ratios from NVIDIA RA-11337-001 Table 9.1. That
+   table sizes a 4 SU / 256-node SuperPOD with 2,048 compute ports, and the
+   quantities imply these ratios per node port:
+
+     1 x node-side transceiver, 1 x switch-side twin-port transceiver,
+     2 x node-leaf fibre, 2 x leaf-spine twin-port, 2 x leaf-spine fibre
+
+   The doubling on cables is because a twin-port OSFP cage carries two links.
+   Ethernet (F4) variants are used throughout since this tool builds a
+   Spectrum fabric; the InfiniBand equivalents are noted per record. */
+const OPTICS = {
+  'osfp-800-node': { label: 'OSFP single-port flat-top transceiver, 800G', pn: '980-9I51A-00NS00', role: 'Node side, compute fabric' },
+  'osfp-twin-1600': { label: 'OSFP twin-port finned transceiver, 1600G', pn: '980-9I510-F4NS00', role: 'Switch side (InfiniBand: 980-9I510-00NS00)' },
+  'qsfp-400': { label: 'QSFP single-port flat-top transceiver, 400G', pn: '980-9I693-F4NS00', role: 'BlueField-3 and storage (InfiniBand: 980-9I693-00NS00)' },
+  'qsfp-400-cp': { label: 'QSFP transceiver 400G, control plane', pn: '980-9I51S-F4NS00', role: 'Management and control-plane nodes' },
+  'osfp-800-uplink': { label: 'OSFP transceiver, 800G', pn: '980-9I30H-F4NM00', role: 'Inband spine to OOB leaf, NFS and uplink' },
+  'dr1-100': { label: '100G DR1 transceiver', pn: '980-9I042-00C000', role: 'OOB uplink and user storage' },
+  'splitter-dr4': { label: 'DR4 to 4x DR1 fabric splitter', pn: 'NV08M31P2X1BHM020', role: 'Leaf to NFS, SN2201 and uplink' },
+  'fibre-mmf': { label: 'MMF passive fibre cable', pn: '980-9I570-00N030', role: 'Node-leaf and leaf-spine' },
+  'fibre-mgmt': { label: 'MMF passive fibre cable, management', pn: '980-9I557-00N030', role: 'Storage and management to leaf' },
+  'cat6': { label: 'Cat6 copper patch lead', pn: 'Cat6', role: 'Out-of-band 1GbE' },
+};
+
+/* Links per node port, per Table 9.1. */
+const CABLE_RATIOS = {
+  nodeTransceiverPerPort: 1,
+  leafTransceiverPerPort: 1,
+  nodeLeafCablePerPort: 2,
+  spineTransceiverPerPort: 2,
+  spineCablePerPort: 2,
+  // Figure 4.9: three OOB links per DGX — one BMC plus two BlueField-3.
+  oobLinksPerNode: 3,
+};
+
 /* ---------- rack and facility rules ---------- */
 /* The elevations put exactly 2 GPU nodes in every air-cooled compute rack
    regardless of node size (16 GPUs per rack), and 8 in a liquid-cooled rack

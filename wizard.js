@@ -360,6 +360,42 @@ function totalsCard(r, fac, w) {
   </section>`;
 }
 
+function opticsCard(bom) {
+  const byGroup = {};
+  bom.rows.forEach((r) => { (byGroup[r.group] = byGroup[r.group] || []).push(r); });
+  const body = Object.entries(byGroup).map(([g, rows]) => `
+    <tr class="highlight"><td colspan="4"><strong>${escW(g)}</strong></td></tr>
+    ${rows.map((r) => `<tr>
+      <td>${escW(r.spec.label)}${r.note ? ` <span style="color:var(--text-muted)">— ${escW(r.note)}</span>` : ''}</td>
+      <td><code>${escW(r.spec.pn)}</code></td>
+      <td class="num">${nfW(r.qty)}</td>
+      <td style="color:var(--text-muted)">${escW(r.spec.role)}</td>
+    </tr>`).join('')}`).join('');
+
+  return `<section class="card">
+    <h2>Optics, transceivers and cabling</h2>
+    <div class="tiles" style="margin-bottom:16px">
+      <div class="tile"><div class="v">${nfW(bom.ports.ewPorts)}</div><div class="k">East-west node ports</div></div>
+      <div class="tile"><div class="v">${nfW(bom.ports.nsPorts)}</div><div class="k">Storage fabric ports</div></div>
+      <div class="tile"><div class="v">${nfW(bom.ports.ibPorts)}</div><div class="k">In-band ports</div></div>
+      <div class="tile"><div class="v">${nfW(bom.ports.stPorts)}</div><div class="k">WEKApod ports</div></div>
+      <div class="tile"><div class="v">${nfW(bom.ports.oobLinks)}</div><div class="k">Out-of-band links</div></div>
+    </div>
+    <div class="table-scroll"><table>
+      <thead><tr><th>Item</th><th>Part number</th><th class="num">Qty</th><th>Role</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>
+    <div class="table-scroll" style="margin-top:16px"><table>
+      <thead><tr><th>Order total by part</th><th>Part number</th><th class="num">Qty</th></tr></thead>
+      <tbody>${bom.totals.map((t) => `<tr><td>${escW(t.spec.label)}</td><td><code>${escW(t.spec.pn)}</code></td><td class="num">${nfW(t.qty)}</td></tr>`).join('')}</tbody>
+    </table></div>
+    <div class="card-note">
+      Part numbers and per-link ratios follow NVIDIA RA-11337-001 Table 9.1. That table sizes a 4 SU, 256-node SuperPOD, and feeding its own configuration back into this model reproduces its quantities exactly — 2,048 node transceivers, 2,048 twin-port switch transceivers and 4,096 node-leaf fibres for 2,048 compute ports.
+      Cable counts are double the port counts because a twin-port OSFP cage carries two links. Ethernet (F4) variants are listed since this design builds a Spectrum fabric; the InfiniBand equivalents are given in the role column. Cable <em>lengths</em> are not sized here — the listed fibre is the RA's 30 m part, and a real order needs a length schedule from the floor plan.
+    </div>
+  </section>`;
+}
+
 function sourcesCard() {
   return `<section class="card"><h2>Sources and method</h2>
     <ul class="sources">
@@ -457,6 +493,7 @@ function renderResults() {
   ${storageNodeCard(weka)}
   ${protectionCard(weka)}
   ${bomCard(inf, fac, weka)}
+  ${opticsCard(cablingBOM({ fac, node: inf.node, gpuNodes: inf.nodes, weka }))}
   ${totalsCard(inf, fac, weka)}
 
   ${inf.notes.length ? `<section class="card"><h2>Design checks</h2>

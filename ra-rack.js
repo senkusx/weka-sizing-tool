@@ -95,11 +95,21 @@ window.RARack = (function () {
     s += rect(x0, 4, iw, trayH - 6, '#3e3e44', C.fEdge, 1.5);
     s += rect(x0 + 3, 6.5, iw - 6, trayH - 11, `url(#hc${uid})`, '#33333a', 1);
     s += text(x0 + 10, 4 + (trayH - 6) / 2 + 3, `${d.gpuCount}x ${d.gpuShort}`, '#8f8f97', 8.5, 'start', 600);
-    // Status cluster and NVMe bank below.
+    // Status cluster, then the E1.S bank. Supermicro's HGX chassis carries eight
+    // hot-swap E1.S carriers plus two M.2 boot devices — E1.S is a narrow blade,
+    // not the wide U.2 carrier this used to draw.
     const by = trayH + 3, bh = h - trayH - 8;
     [C.green, C.amber, '#8e8e95'].forEach((c, i) => s += circ(x0 + 5, by + 4 + i * ((bh - 8) / 2 || 1), 1.5, c));
-    s += driveRow(x0 + 12, by, iw * 0.42, bh, 8, uid);
-    s += rect(x0 + 12 + iw * 0.44, by, iw * 0.54, bh, `url(#pd${uid})`, '#2a2a2e', 0.8);
+    const bays = 8, pitch = 9;
+    for (let i = 0; i < bays; i++) {
+      const bx = x0 + 12 + i * pitch;
+      s += rect(bx, by, pitch - 1.6, bh, `url(#bg${uid})`, C.bayEdge, 0.6);
+      s += rect(bx + 0.8, by + 1.2, 1.6, bh - 2.4, C.handle, '', 0.4);
+      s += circ(bx + pitch - 3.6, by + 2.4, 0.7, C.green);
+    }
+    const vx = x0 + 12 + bays * pitch + 6;
+    s += rect(vx, by, x1 - vx, bh, `url(#pd${uid})`, '#2a2a2e', 0.8);
+    s += text(x1 - 3, by + bh - 2, '8x E1.S', '#6d6d75', 6, 'end', 500);
     return s;
   }
 
@@ -330,10 +340,56 @@ window.RARack = (function () {
       return { svg: s, anchors: [] };
     }
     let s = rect(0, 0, w, h, `url(#fg${uid})`, C.fEdge, 2) + ears(w, h, true);
-    const x0 = G.EAR + 6, iw = w - G.EAR * 2 - 12;
+    const x0 = G.EAR + 6, x1 = w - G.EAR - 6, iw = x1 - x0;
     s += circ(x0 + 4, h / 2, 1.4, C.green);
-    if (d.drives) s += driveRow(x0 + 10, 3, iw * 0.5, h - 6, d.drives, uid);
-    s += rect(x0 + 10 + iw * 0.55, 3, iw * 0.44, h - 6, `url(#pd${uid})`, '#2a2a2e', 0.8);
+
+    // A 4U 36-bay storage chassis is a grid of 3.5" carriers filling the face.
+    if (d.face === 'lff') {
+      const cols = 12, rows = 3, gx = x0 + 9;
+      const cw = (x1 - gx) / cols, ch = (h - 7) / rows;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const bx = gx + c * cw, by = 3.5 + r * ch;
+          s += rect(bx, by, cw - 1.4, ch - 1.4, `url(#bg${uid})`, C.bayEdge, 0.6);
+          s += rect(bx + 1, by + 1, 2, ch - 3.4, C.handle, '', 0.4);
+          s += circ(bx + cw - 4, by + 2.6, 0.7, C.green);
+        }
+      }
+      return { svg: s, anchors: [] };
+    }
+
+    // Network appliances lead with port banks rather than drive bays — the
+    // SRX1500 carries twelve 1GbE RJ45 plus four SFP and four SFP+.
+    if (d.face === 'ports') {
+      const n = d.rj45 || 12, per = Math.ceil(n / 2), pw = 7.5;
+      const rowH = (h - 8) / 2;
+      for (let i = 0; i < n; i++) {
+        s += rect(x0 + 10 + (i % per) * pw, 3.5 + Math.floor(i / per) * (rowH + 1),
+          pw - 1.2, rowH, '#2f6f3f', C.fEdge, 0.5);
+      }
+      const sx = x0 + 12 + per * pw + 6;
+      for (let i = 0; i < (d.sfp || 8); i++) {
+        const cx = sx + (i % 4) * 13;
+        if (cx + 12 > x1) break;
+        s += rect(cx, 3.5 + Math.floor(i / 4) * (rowH + 1), 11.5, rowH, C.port, C.portEdge, 0.6);
+      }
+      return { svg: s, anchors: [] };
+    }
+
+    // Default 1U/2U server: hot-swap SFF bank, then vent.
+    const n = d.drives || 0;
+    if (n) {
+      const pitch = Math.min(13, (iw * 0.55) / n);
+      for (let i = 0; i < n; i++) {
+        const bx = x0 + 10 + i * pitch;
+        s += rect(bx, 3, pitch - 1.4, h - 6, `url(#bg${uid})`, C.bayEdge, 0.6);
+        s += rect(bx + 0.8, 4.2, 1.8, h - 8.4, C.handle, '', 0.4);
+      }
+      const vx = x0 + 12 + n * pitch;
+      if (x1 - vx > 14) s += rect(vx, 3, x1 - vx, h - 6, `url(#pd${uid})`, '#2a2a2e', 0.8);
+    } else {
+      s += rect(x0 + 10, 3, iw - 10, h - 6, `url(#pd${uid})`, '#2a2a2e', 0.8);
+    }
     return { svg: s, anchors: [] };
   }
 

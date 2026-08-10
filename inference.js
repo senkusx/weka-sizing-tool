@@ -398,6 +398,62 @@ function wekapodNodesFor({ podKey, targetTB, targetReadGBs, schemeId, hotSpares 
   return n;
 }
 
+/* ---------- optics and cabling bill of materials ----------
+   Counts are derived from this design's own port totals using the per-port
+   ratios NVIDIA publishes in RA-11337-001 Table 9.1. Feeding that document's
+   own configuration back in reproduces its quantities: 256 nodes x 8 compute
+   ports gives 2,048 node transceivers, 2,048 twin-port switch transceivers and
+   4,096 node-leaf fibres. */
+function cablingBOM({ fac, node, gpuNodes, weka }) {
+  const fb = fac.fabric;
+  const r = CABLE_RATIOS;
+  const ewPorts = gpuNodes * node.ewPortsPerNode;
+  const nsPorts = gpuNodes * 2;          // storage / north-south
+  const ibPorts = gpuNodes * 2;          // in-band management, bonded pair
+  const stPorts = weka ? weka.ports : 0; // WEKApod data ports
+  const oobLinks = gpuNodes * r.oobLinksPerNode
+    + (fb.ewLeaves + fb.ewSpines + fb.nsLeaves + fb.nsSpines + fb.oobLeaves + fb.oobSpines)
+    + RACK.mgmtRack.contents.length + (weka ? weka.nodes : 0);
+
+  const rows = [
+    { group: 'Compute fabric (east-west)', optic: 'osfp-800-node', qty: ewPorts * r.nodeTransceiverPerPort },
+    { group: 'Compute fabric (east-west)', optic: 'osfp-twin-1600', qty: ewPorts * r.leafTransceiverPerPort, note: 'leaf side, node-facing' },
+    { group: 'Compute fabric (east-west)', optic: 'fibre-mmf', qty: ewPorts * r.nodeLeafCablePerPort, note: 'node to leaf' },
+    fb.ewSpines ? { group: 'Compute fabric (east-west)', optic: 'osfp-twin-1600', qty: ewPorts * r.spineTransceiverPerPort, note: 'leaf to spine' } : null,
+    fb.ewSpines ? { group: 'Compute fabric (east-west)', optic: 'fibre-mmf', qty: ewPorts * r.spineCablePerPort, note: 'leaf to spine' } : null,
+
+    { group: 'Storage fabric (north-south)', optic: 'qsfp-400', qty: nsPorts, note: 'BlueField-3, node side' },
+    { group: 'Storage fabric (north-south)', optic: 'osfp-twin-1600', qty: Math.ceil(nsPorts / 2), note: 'leaf side' },
+    { group: 'Storage fabric (north-south)', optic: 'fibre-mmf', qty: nsPorts, note: 'node to leaf' },
+    stPorts ? { group: 'Storage fabric (north-south)', optic: 'qsfp-400', qty: stPorts, note: 'WEKApod side' } : null,
+    stPorts ? { group: 'Storage fabric (north-south)', optic: 'fibre-mgmt', qty: stPorts, note: 'WEKApod to leaf' } : null,
+
+    { group: 'In-band management', optic: 'qsfp-400', qty: ibPorts, note: 'bonded pair per node' },
+    { group: 'In-band management', optic: 'fibre-mgmt', qty: ibPorts, note: 'node to leaf' },
+    { group: 'In-band management', optic: 'qsfp-400-cp', qty: RACK.mgmtRack.contents.length * 2, note: 'platform and control-plane nodes' },
+    { group: 'In-band management', optic: 'osfp-800-uplink', qty: Math.max(4, fb.oobLeaves), note: 'inband spine to OOB leaf, NFS and uplink' },
+    { group: 'In-band management', optic: 'splitter-dr4', qty: Math.max(2, Math.ceil(fb.oobLeaves / 2)), note: 'DR4 breakout to NFS, SN2201 and uplink' },
+    { group: 'In-band management', optic: 'dr1-100', qty: 4, note: 'customer edge uplink, 2x 100GbE DR1 redundant pair' },
+
+    { group: 'Out-of-band management', optic: 'cat6', qty: oobLinks, note: 'BMC, host management, switches, PDUs' },
+    { group: 'Out-of-band management', optic: 'dr1-100', qty: fb.oobLeaves * 2, note: 'SN2201 uplinks' },
+  ].filter(Boolean);
+
+  // Collapse duplicate part numbers within a group for a clean order list.
+  const totals = {};
+  rows.forEach((x) => {
+    const key = x.optic;
+    totals[key] = (totals[key] || 0) + x.qty;
+  });
+
+  return {
+    rows: rows.map((x) => ({ ...x, spec: OPTICS[x.optic] })),
+    totals: Object.entries(totals).map(([k, qty]) => ({ optic: k, spec: OPTICS[k], qty }))
+      .sort((a, b) => b.qty - a.qty),
+    ports: { ewPorts, nsPorts, ibPorts, stPorts, oobLinks },
+  };
+}
+
 /* ---------- rack layout ----------
    Device placement mirrors the reference architecture elevations: the fixed
    management rack, GPU racks with their storage and CDU, a switch-fabric rack
@@ -420,19 +476,19 @@ function buildRALayout(f, opts) {
   m.push(dev(48, 1, 'panel', 'Patch panel', 'Fibre + copper'));
   m.push(dev(47, 1, 'panel', 'Converter', 'Media converter'));
   m.push(dev(46, 3, 'infra', 'OOB break-glass', 'RevPi + SITOP'));
-  m.push(dev(42, 1, 'infra', 'Serial switch', INFRA.serial.model));
-  m.push(dev(40, 1, 'infra', 'OOB firewall A', INFRA['oob-fw'].model));
-  m.push(dev(38, 1, 'infra', 'OOB firewall B', INFRA['oob-fw'].model));
-  m.push(dev(36, 1, 'infra', 'Platform router A', INFRA['platform-router'].model, { drives: 4 }));
-  m.push(dev(34, 1, 'infra', 'Platform router B', INFRA['platform-router'].model, { drives: 4 }));
-  m.push(dev(32, 1, 'infra', 'Platform server 1', INFRA['platform-server'].model, { drives: 4 }));
-  m.push(dev(30, 1, 'infra', 'Platform server 2', INFRA['platform-server'].model, { drives: 4 }));
-  m.push(dev(28, 1, 'infra', 'Platform server 3', INFRA['platform-server'].model, { drives: 4 }));
+  m.push(dev(42, 1, 'infra', 'Serial switch', INFRA.serial.model, { face: 'ports', rj45: 24, sfp: 2 }));
+  m.push(dev(40, 1, 'infra', 'OOB firewall A', INFRA['oob-fw'].model, { face: 'ports', rj45: 12, sfp: 8 }));
+  m.push(dev(38, 1, 'infra', 'OOB firewall B', INFRA['oob-fw'].model, { face: 'ports', rj45: 12, sfp: 8 }));
+  m.push(dev(36, 1, 'infra', 'Platform router A', INFRA['platform-router'].model, { drives: 8 }));
+  m.push(dev(34, 1, 'infra', 'Platform router B', INFRA['platform-router'].model, { drives: 8 }));
+  m.push(dev(32, 1, 'infra', 'Platform server 1', INFRA['platform-server'].model, { drives: 8 }));
+  m.push(dev(30, 1, 'infra', 'Platform server 2', INFRA['platform-server'].model, { drives: 8 }));
+  m.push(dev(28, 1, 'infra', 'Platform server 3', INFRA['platform-server'].model, { drives: 8 }));
   m.push(dev(26, 2, 'infra', 'Tier 3 storage', INFRA.tier3.model, { drives: 4 }));
   m.push(dev(24, 1, 'switch', 'OOB leaf A', FABRIC.sn2201.label, { ports: 48, role: 'oob' }));
   m.push(dev(23, 1, 'switch', 'OOB leaf B', FABRIC.sn2201.label, { ports: 48, role: 'oob' }));
-  m.push(dev(2, 1, 'infra', 'CPU compute node 1', INFRA['cpu-node'].model, { drives: 4 }));
-  m.push(dev(1, 1, 'infra', 'CPU compute node 2', INFRA['cpu-node'].model, { drives: 4 }));
+  m.push(dev(2, 1, 'infra', 'CPU compute node 1', INFRA['cpu-node'].model, { drives: 8 }));
+  m.push(dev(1, 1, 'infra', 'CPU compute node 2', INFRA['cpu-node'].model, { drives: 8 }));
   // With no dedicated fabric rack the data-plane leaves sit in the management
   // rack, exactly as the edge reference design draws them.
   if (f.fabricRacks === 0) {
@@ -457,7 +513,7 @@ function buildRALayout(f, opts) {
     if (liquid) { d.push(dev(4, INFRA.cdu.ru, 'infra', 'CDU 250 kW', INFRA.cdu.label)); bottom = 5; }
     // Only the first few compute racks carry Tier 2 block storage.
     if (r < f.tier2Count) {
-      d.push(dev(bottom + INFRA.tier2.ru - 1, INFRA.tier2.ru, 'infra', 'Tier 2 block storage', INFRA.tier2.model, { drives: 12 }));
+      d.push(dev(bottom + INFRA.tier2.ru - 1, INFRA.tier2.ru, 'infra', 'Tier 2 block storage', INFRA.tier2.model, { face: 'lff', drives: 36 }));
       bottom += INFRA.tier2.ru;
     }
     // Stack GPU nodes downward from the top of the rack.
@@ -524,5 +580,5 @@ function buildRALayout(f, opts) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { sizeInference, sizeFacility, buildRALayout, sizeWekapod, wekapodNodesFor, kvBytesPerToken, weightBytes, replicaThroughput, minTensorParallel };
+  module.exports = { sizeInference, sizeFacility, buildRALayout, sizeWekapod, wekapodNodesFor, cablingBOM, kvBytesPerToken, weightBytes, replicaThroughput, minTensorParallel };
 }
