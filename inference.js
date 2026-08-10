@@ -238,8 +238,11 @@ function sizeFacility({ gpuNodes, nodeKey, coolingKey, profileKey, storageNodes 
   const fabricRacks = (profile.dedicatedFabricRack && switchU > 16)
     ? Math.max(1, Math.ceil(switchU / (RACK.totalU - 8))) : 0;
 
+  // Storage racks are sized on chassis, not nodes: four nodes share a 2U box.
+  const wekaChassis = Math.ceil((storageNodes || 0) / INFRA.wekapod.nodesPerChassis);
+  const wekaU = wekaChassis * INFRA.wekapod.chassisRu;
   const storageRacks = profile.storage === 'wekapod' && storageNodes
-    ? Math.ceil(storageNodes / 24) : 0;
+    ? Math.max(1, Math.ceil(wekaU / (RACK.totalU - 8))) : 0;
 
   const mgmtRacks = 1;
   const totalRacks = computeRacks + fabricRacks + storageRacks + mgmtRacks;
@@ -273,6 +276,7 @@ function sizeFacility({ gpuNodes, nodeKey, coolingKey, profileKey, storageNodes 
   return {
     node, cooling, profile,
     computeRacks, fabricRacks, storageRacks, mgmtRacks, totalRacks,
+    storage: { nodes: storageNodes || 0, chassis: wekaChassis, u: wekaU },
     fabric: { ewLeaves, ewSpines, nsLeaves, nsSpines, oobLeaves, oobSpines, switchU, ewPorts, nsPorts, oobPorts,
       ewOversub: FABRIC_RULES.eastWestOversub, nsOversub: FABRIC_RULES.northSouthOversub },
     power: { gpuNodeW, cduW, tier2W, switchW, storageW, mgmtW, totalW, perComputeRackW },
@@ -282,6 +286,109 @@ function sizeFacility({ gpuNodes, nodeKey, coolingKey, profileKey, storageNodes 
   };
 }
 
+/* ---------- rack layout ----------
+   Device placement mirrors the reference architecture elevations: the fixed
+   management rack, GPU racks with their storage and CDU, a switch-fabric rack
+   ordered OOB / north-south / east-west from the top down, and WEKApod chassis
+   stacked in the storage rack. */
+function buildRALayout(f, opts) {
+  const node = f.node;
+  const liquid = f.cooling.cdu;
+  const nodeRu = liquid && node.ruLiquid ? node.ruLiquid : node.ru;
+  const gpu = GPUS[node.gpuKey];
+  const totalU = RACK.totalU;
+  const racks = [];
+
+  const dev = (uTop, ru, type, name, detail, extra) =>
+    Object.assign({ uTop, ru, type, name, detail }, extra || {});
+
+  // --- management rack, fixed across all three reference designs ---
+  const m = [];
+  m.push(dev(48, 1, 'panel', 'Patch panel', 'Fibre + copper'));
+  m.push(dev(47, 1, 'panel', 'Converter', 'Media converter'));
+  m.push(dev(46, 3, 'infra', 'OOB break-glass', 'RevPi + SITOP'));
+  m.push(dev(42, 1, 'infra', 'Serial switch', INFRA.serial.model));
+  m.push(dev(40, 1, 'infra', 'OOB firewall A', INFRA['oob-fw'].model));
+  m.push(dev(38, 1, 'infra', 'OOB firewall B', INFRA['oob-fw'].model));
+  m.push(dev(36, 1, 'infra', 'Platform router A', INFRA['platform-router'].model, { drives: 4 }));
+  m.push(dev(34, 1, 'infra', 'Platform router B', INFRA['platform-router'].model, { drives: 4 }));
+  m.push(dev(32, 1, 'infra', 'Platform server 1', INFRA['platform-server'].model, { drives: 4 }));
+  m.push(dev(30, 1, 'infra', 'Platform server 2', INFRA['platform-server'].model, { drives: 4 }));
+  m.push(dev(28, 1, 'infra', 'Platform server 3', INFRA['platform-server'].model, { drives: 4 }));
+  m.push(dev(26, 2, 'infra', 'Tier 3 storage', INFRA.tier3.model, { drives: 4 }));
+  m.push(dev(24, 1, 'switch', 'OOB leaf A', FABRIC.sn2201.label, { ports: 48, role: 'oob' }));
+  m.push(dev(23, 1, 'switch', 'OOB leaf B', FABRIC.sn2201.label, { ports: 48, role: 'oob' }));
+  m.push(dev(2, 1, 'infra', 'CPU compute node 1', INFRA['cpu-node'].model, { drives: 4 }));
+  m.push(dev(1, 1, 'infra', 'CPU compute node 2', INFRA['cpu-node'].model, { drives: 4 }));
+  racks.push({ name: 'Management rack', kind: 'mgmt', devices: m });
+
+  // --- GPU compute racks ---
+  const perRack = f.cooling.gpuNodesPerRack;
+  let placed = 0;
+  for (let r = 0; r < f.computeRacks; r++) {
+    const d = [];
+    const here = Math.min(perRack, opts.gpuNodes - placed);
+    // Reserve the bottom of the rack for storage and, on DLC, the CDU.
+    let bottom = 1;
+    if (liquid) { d.push(dev(4, INFRA.cdu.ru, 'infra', 'CDU 250 kW', INFRA.cdu.label)); bottom = 5; }
+    if (f.profile.storage === 'tier2') {
+      d.push(dev(bottom + INFRA.tier2.ru - 1, INFRA.tier2.ru, 'infra', 'Tier 2 block storage', INFRA.tier2.model, { drives: 12 }));
+      bottom += INFRA.tier2.ru;
+    }
+    // Stack GPU nodes downward from the top of the rack.
+    let u = totalU;
+    for (let n = 0; n < here; n++) {
+      placed++;
+      d.push(dev(u, nodeRu, node.label.startsWith('NVIDIA DGX') ? 'dgx' : 'gpu',
+        `GPU node ${placed}`, `${node.gpuCount}x ${gpu.short}${liquid ? ' DLC' : ''}`,
+        { gpuCount: node.gpuCount, gpuShort: gpu.short, ewPorts: node.ewPortsPerNode,
+          ewGb: node.ewPortGb, nsPorts: 2, nsGb: 400, psuCount: node.psuCount || 4 }));
+      u -= nodeRu;
+    }
+    racks.push({ name: `GPU compute rack ${r + 1}`, kind: 'gpu', devices: d });
+  }
+
+  // --- switch fabric rack(s) ---
+  if (f.fabricRacks > 0) {
+    const all = [];
+    for (let i = 0; i < f.fabric.oobSpines; i++) all.push({ ru: 2, label: `OOB spine ${i + 1}`, m: FABRIC.sn4600c, role: 'oob' });
+    for (let i = 0; i < f.fabric.oobLeaves; i++) all.push({ ru: 1, label: `OOB leaf ${i + 1}`, m: FABRIC.sn2201, role: 'oob' });
+    for (let i = 0; i < f.fabric.nsSpines; i++) all.push({ ru: 2, label: `North-south spine ${i + 1}`, m: FABRIC.sn5610, role: 'ns' });
+    for (let i = 0; i < f.fabric.nsLeaves; i++) all.push({ ru: 2, label: `North-south leaf ${i + 1}`, m: FABRIC.sn5610, role: 'ns' });
+    for (let i = 0; i < f.fabric.ewSpines; i++) all.push({ ru: 2, label: `East-west spine ${i + 1}`, m: FABRIC.sn5610, role: 'ew' });
+    for (let i = 0; i < f.fabric.ewLeaves; i++) all.push({ ru: 2, label: `East-west leaf ${i + 1}`, m: FABRIC.sn5610, role: 'ew' });
+
+    let idx = 0;
+    for (let r = 0; r < f.fabricRacks; r++) {
+      const d = []; let u = totalU;
+      // A blank unit between switches, as the elevations draw them.
+      while (idx < all.length && u - all[idx].ru + 1 >= 1) {
+        const sw = all[idx++];
+        d.push(dev(u, sw.ru, 'switch', sw.label, sw.m.label, { ports: sw.m.ports, role: sw.role }));
+        u -= sw.ru + 1;
+      }
+      racks.push({ name: f.fabricRacks > 1 ? `Switch fabric rack ${r + 1}` : 'Switch fabric rack', kind: 'fabric', devices: d });
+    }
+  }
+
+  // --- storage rack(s) ---
+  if (f.storageRacks > 0 && f.storage.chassis > 0) {
+    let left = f.storage.chassis;
+    for (let r = 0; r < f.storageRacks; r++) {
+      const d = []; let u = totalU;
+      while (left > 0 && u - INFRA.wekapod.chassisRu + 1 >= 1) {
+        const n = Math.min(INFRA.wekapod.nodesPerChassis, f.storage.nodes - (f.storage.chassis - left) * INFRA.wekapod.nodesPerChassis);
+        d.push(dev(u, INFRA.wekapod.chassisRu, 'wekapod',
+          `WEKApod chassis ${f.storage.chassis - left + 1}`, `${n} nodes`, { nodes: n }));
+        u -= INFRA.wekapod.chassisRu; left--;
+      }
+      racks.push({ name: f.storageRacks > 1 ? `Storage rack ${r + 1}` : 'POSIX/S3/AI storage rack', kind: 'storage', devices: d });
+    }
+  }
+
+  return { racks, nodeRu };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { sizeInference, sizeFacility, kvBytesPerToken, weightBytes, replicaThroughput, minTensorParallel };
+  module.exports = { sizeInference, sizeFacility, buildRALayout, kvBytesPerToken, weightBytes, replicaThroughput, minTensorParallel };
 }

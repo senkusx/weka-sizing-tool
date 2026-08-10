@@ -127,6 +127,28 @@ console.log('\nInferX reference architecture — facility roll-up');
   check('air RTX 6000 Pro rack (2 nodes + tier2)', rtx.power.perComputeRackW, 14246, 0, ' W');
 }
 
+console.log('\nDGX B300 and WEKApod form factors');
+{
+  const dgx = GPU_NODES['dgx-b300'];
+  check('DGX B300 rack units', dgx.ru, 10, 0, 'U');
+  check('DGX B300 power', dgx.watts, 14500, 0, ' W');
+  check('DGX B300 weight', dgx.weightKg, 168, 0, ' kg');
+  check('DGX B300 GPU memory total', dgx.gpuCount * GPUS[dgx.gpuKey].memGB, 2304, 0, ' GB');
+  // The DLC B300 chassis is 4U, which is the only way eight fit with a CDU.
+  const liq = sizeFacility({ gpuNodes: 8, nodeKey: 'smc-b300', coolingKey: 'liquid', profileKey: 'regional', storageNodes: 8 });
+  const L = buildRALayout(liq, { gpuNodes: 8 });
+  check('DLC B300 chassis height', L.nodeRu, 4, 0, 'U');
+  const gpuRack = L.racks.find((r) => r.kind === 'gpu');
+  const usedU = gpuRack.devices.reduce((a, d) => a + d.ru, 0);
+  check('8 DLC nodes + CDU fit one rack', usedU, 36, 0, 'U');
+  const overflow = L.racks.some((r) => r.devices.some((d) => d.uTop > RACK.totalU || d.uTop - d.ru + 1 < 1));
+  console.log(`  ${overflow ? 'FAIL' : 'PASS'}  no device overflows its rack`);
+  if (overflow) failures++;
+  // WEKApod Nitro is a 2U four-node chassis, not four 1U boxes.
+  check('WEKApod nodes per chassis', INFRA.wekapod.nodesPerChassis, 4, 0);
+  check('24 WEKApod nodes occupy', liq.storage ? Math.ceil(24 / 4) * 2 : 0, 12, 0, 'U');
+}
+
 console.log('\nInference engine — memory arithmetic');
 {
   const m = MODELS['llama31-70b'];

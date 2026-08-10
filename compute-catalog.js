@@ -63,7 +63,20 @@ const GPU_NODES = {
     eastWest: '8x ConnectX-8 SuperNIC OSFP 800GbE',
     northSouth: 'BlueField-3 2-port 400GbE DPU',
     ewPortsPerNode: 8, ewPortGb: 800, liquidCapable: true,
-    src: 'RA BOM + rack elevation (13899 W, 121 kg)',
+    // The DLC variant is a 4U chassis, which is how the liquid elevation fits
+    // eight nodes plus a CDU into 48U where eight 8U air chassis never would.
+    ruLiquid: 4, psuCount: 6,
+    src: 'RA BOM + rack elevation (13899 W, 121 kg); 4U DLC chassis per the liquid elevation',
+  },
+  'dgx-b300': {
+    label: 'NVIDIA DGX B300', sublabel: 'NVIDIA Blackwell Ultra 8-GPU (DGX)',
+    ru: 10, gpuKey: 'b300', gpuCount: 8, watts: 14500, weightKg: 168,
+    cpu: '2x Intel Xeon 6776P', cpuCores: 128, ramGB: 4096,
+    bootGB: 1920, localTB: 61.44,
+    eastWest: '8x 800G OSFP (ConnectX-8)',
+    northSouth: '4x 400G OSFP (BlueField-3)',
+    ewPortsPerNode: 8, ewPortGb: 800, liquidCapable: false, psuCount: 12,
+    src: 'NVIDIA DGX B300 datasheet: 10U, 14.5 kW (12x 3.3 kW PSU), 168 kg, 2.1 TB HBM3e total. System RAM is the published maximum.',
   },
   'smc-rtx6000': {
     label: 'Supermicro AS-5126GS-TNRT2', sublabel: 'NVIDIA RTX PRO 6000 Blackwell 8-GPU',
@@ -104,7 +117,18 @@ const INFRA = {
   'cpu-node': { label: 'CPU Compute Node', model: 'AS-1125HS-TNR', ru: 1, watts: 1070, weightKg: 23.1, c13: 2 },
   'tier2': { label: 'Tier 2 Block Storage', model: 'SSG-641E-E1CR36L', ru: 4, watts: 1188, weightKg: 98, c19: 2 },
   'tier3': { label: 'Tier 3 Storage', model: 'Synology RS822RP+', ru: 2, watts: 150, weightKg: 10.88, c13: 2 },
-  'wekapod': { label: 'WEKApod Nitro', model: 'WEKApod Nitro', ru: 1, watts: 800, weightKg: 31.2, c13: 2 },
+  // WEKA ships the Nitro 150 as a 2U four-node chassis (56 TLC drives per
+  // appliance), so a node occupies half a rack unit rather than a whole one.
+  // The reference architecture elevation draws one U per node, which overstates
+  // the storage rack by a factor of two. Power and weight are the RA's figures;
+  // WEKA does not publish per-node power.
+  'wekapod': {
+    label: 'WEKApod Nitro node', model: 'WEKApod Nitro 150', ru: 0.5, nodesPerChassis: 4, chassisRu: 2,
+    watts: 800, weightKg: 31.2, c13: 2,
+    perApplianceNodes: 8, readGBs: 720, writeGBs: 186, iops: 18e6, drivesPerChassis: 56,
+    net: 'Dual-port NVIDIA ConnectX, 800 Gb/s per node',
+    src: 'WEKA published: 2U 4-node chassis, 56 TLC drives, 720/186 GB/s, 18M IOPS. Power and weight from the RA sheet.',
+  },
   'oob-fw': { label: 'OOB Firewall', model: 'Juniper SRX1500', ru: 1, watts: 150, weightKg: 7.3, c13: 2 },
   'serial': { label: 'Serial Switch', model: 'Perle IOLAN SCS48C', ru: 1, watts: 23, weightKg: 3.6, c13: 1 },
   'cdu': { label: 'Supermicro CDU 250 kW', model: 'CDU-250', ru: 4, watts: 3000, weightKg: 114, c19: 2 },

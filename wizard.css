@@ -1,0 +1,97 @@
+/* Guided sizing journey — stepper, step layout and bottom navigation. */
+
+.stepper {
+  display: flex;
+  gap: 0;
+  padding: 0 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 57px;
+  z-index: 15;
+  overflow-x: auto;
+}
+.stepper button {
+  border: none;
+  background: none;
+  padding: 14px 20px 12px;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 0;
+}
+.stepper button:hover { background: var(--surface-2); color: var(--text-secondary); }
+.stepper button.active { color: var(--text-primary); border-bottom-color: var(--accent); font-weight: 600; }
+.stepper button.done { color: var(--text-secondary); }
+.stepper .num {
+  width: 20px; height: 20px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600;
+  background: var(--surface-2); color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  flex: none;
+}
+.stepper button.active .num { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.stepper button.done .num { background: var(--good); color: #fff; border-color: transparent; }
+
+.wizard { max-width: 1560px; margin: 0 auto; padding: 22px 24px 110px; }
+
+.step-head { margin-bottom: 18px; }
+.step-head h2 { font-size: 22px; font-weight: 620; margin: 0 0 5px; letter-spacing: -0.01em; }
+.step-head p { margin: 0; font-size: 13.5px; color: var(--text-secondary); max-width: 82ch; line-height: 1.55; }
+
+.step-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.step-grid .card { display: flex; flex-direction: column; gap: 13px; }
+
+.step-live { margin-top: 18px; }
+.step-live .tiles { margin-bottom: 0; }
+
+.wizard-nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  z-index: 20;
+}
+.wizard-nav .wizard-pos { margin-left: auto; margin-right: auto; font-size: 12.5px; color: var(--text-muted); }
+.wizard-nav button { min-width: 108px; }
+.wizard-nav button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.ra-rack-row {
+  display: flex;
+  gap: 30px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  align-items: flex-start;
+}
+.ra-rack-unit { flex: none; }
+.ra-rack-unit .ra-name {
+  font-size: 12.5px; font-weight: 600; text-align: center;
+  margin-bottom: 8px; color: var(--text-primary);
+}
+.ra-rack-unit .ra-sub { font-size: 11.5px; color: var(--text-muted); text-align: center; margin-bottom: 8px; }
+
+.view-toggle { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+.view-toggle button { font-size: 12.5px; padding: 5px 11px; }
+.view-toggle button.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+
+@media print {
+  .stepper, .wizard-nav, .topbar-actions, .view-toggle { display: none; }
+  .wizard { padding-bottom: 20px; }
+  .ra-rack-row { overflow: visible; flex-wrap: wrap; }
+}

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InferX Guided Sizing</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="rack.css">
+<link rel="stylesheet" href="wizard.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <h1>InferX Guided Sizing</h1>
+    <span>Compute → networking → storage → results</span>
+  </div>
+  <div class="topbar-actions">
+    <a class="btn" href="compute.html">Compute</a>
+    <a class="btn" href="index.html">Storage</a>
+    <button id="btn-theme" title="Toggle light / dark">Theme</button>
+    <button id="btn-csv">Export CSV</button>
+    <button id="btn-print" class="primary">Print / PDF</button>
+  </div>
+</header>
+
+<nav class="stepper" id="stepper"></nav>
+
+<main class="wizard" id="wizard">
+
+  <!-- ============ 1. COMPUTE ============ -->
+  <section class="step" data-step="0">
+    <div class="step-head">
+      <h2>Compute</h2>
+      <p>What model are you serving, to how many concurrent users, and at what latency? This drives GPU count and everything downstream.</p>
+    </div>
+    <div class="step-grid">
+      <div class="card">
+        <h2>Deployment</h2>
+        <div class="field"><label for="w-profile">Federation tier</label><select id="w-profile"></select>
+          <span class="hint" id="w-profile-hint"></span></div>
+        <div class="field"><label for="w-node">GPU compute node</label><select id="w-node"></select>
+          <span class="hint" id="w-node-hint"></span></div>
+        <div class="field"><label for="w-cooling">Cooling</label><select id="w-cooling">
+          <option value="air">Air cooled</option><option value="liquid">Direct liquid cooled (DLC)</option>
+        </select><span class="hint" id="w-cool-hint"></span></div>
+      </div>
+      <div class="card">
+        <h2>Workload</h2>
+        <div class="field"><label for="w-model">Model</label><select id="w-model"></select>
+          <span class="hint" id="w-model-hint"></span></div>
+        <div class="field"><label for="w-precision">Precision</label><select id="w-precision"></select></div>
+        <div class="field"><label for="w-conc">Concurrent requests</label>
+          <input type="number" id="w-conc" min="1" max="1000000" value="1000"></div>
+        <div class="field-row">
+          <div class="field"><label for="w-prompt">Prompt tokens</label>
+            <input type="number" id="w-prompt" min="1" value="2048"></div>
+          <div class="field"><label for="w-out">Output tokens</label>
+            <input type="number" id="w-out" min="1" value="512"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Service level</h2>
+        <div class="field"><label for="w-tpot">TPOT target</label>
+          <div class="range-row"><input type="range" id="w-tpot" min="10" max="200" step="5" value="50">
+            <span class="range-val" id="w-tpot-val">50</span></div>
+          <span class="hint">Milliseconds per output token. Caps batch size, so it trades per-user speed against GPU count.</span></div>
+        <div class="field"><label for="w-ttft">TTFT target</label>
+          <div class="range-row"><input type="range" id="w-ttft" min="100" max="5000" step="100" value="1000">
+            <span class="range-val" id="w-ttft-val">1000</span></div></div>
+        <div class="field"><label for="w-tp">Tensor parallel width</label>
+          <select id="w-tp"><option value="">Auto — smallest that fits</option>
+            <option>1</option><option>2</option><option>4</option><option>8</option><option>16</option><option>32</option></select></div>
+      </div>
+    </div>
+    <div class="step-live" id="live-compute"></div>
+  </section>
+
+  <!-- ============ 2. NETWORKING ============ -->
+  <section class="step" data-step="1" hidden>
+    <div class="step-head">
+      <h2>Networking</h2>
+      <p>The fabric follows from the node count. East-west carries GPU-to-GPU traffic and is non-blocking; north-south carries client and storage traffic at 4:1.</p>
+    </div>
+    <div class="step-grid">
+      <div class="card">
+        <h2>Topology</h2>
+        <div class="field"><label for="w-ew">East-west oversubscription</label>
+          <select id="w-ew"><option value="1">1:1 — non-blocking (reference)</option>
+            <option value="2">2:1</option><option value="4">4:1</option></select>
+          <span class="hint">Tensor parallelism spanning nodes needs 1:1. Anything less throttles collectives.</span></div>
+        <div class="field"><label for="w-ns">North-south oversubscription</label>
+          <select id="w-ns"><option value="4">4:1 (reference)</option>
+            <option value="2">2:1</option><option value="1">1:1</option></select></div>
+        <div class="field"><label for="w-breakout">SN5610 port mode</label>
+          <select id="w-breakout"><option value="2">2×400G breakout (reference, MMS4X00-NS)</option>
+            <option value="1">1×800G per cage</option></select></div>
+      </div>
+      <div class="card" id="net-summary"></div>
+    </div>
+    <div class="step-live" id="live-net"></div>
+  </section>
+
+  <!-- ============ 3. STORAGE ============ -->
+  <section class="step" data-step="2" hidden>
+    <div class="step-head">
+      <h2>Storage</h2>
+      <p>The POSIX/S3/AI tier feeds the GPUs. Size it by capacity, by the throughput the fleet needs, or by matching the reference architecture.</p>
+    </div>
+    <div class="step-grid">
+      <div class="card">
+        <h2>WEKA tier</h2>
+        <div class="field"><label for="w-stmode">Sizing basis</label>
+          <select id="w-stmode">
+            <option value="ratio">Throughput per GPU — feed the fleet</option>
+            <option value="capacity">Usable capacity target</option>
+            <option value="manual">Fixed node count</option>
+          </select></div>
+        <div class="field" id="f-ratio"><label for="w-gbpergpu">Read throughput per GPU</label>
+          <div class="range-row"><input type="range" id="w-gbpergpu" min="1" max="20" step="1" value="4">
+            <span class="range-val" id="w-gbpergpu-val">4</span></div>
+          <span class="hint">GB/s per GPU. 2–4 suits inference and RAG; training checkpoints want more.</span></div>
+        <div class="field" id="f-cap" hidden><label for="w-captb">Usable capacity</label>
+          <input type="number" id="w-captb" min="10" step="10" value="1000"><span class="hint">TB net</span></div>
+        <div class="field" id="f-manual" hidden><label for="w-stnodes">WEKApod Nitro nodes</label>
+          <input type="number" id="w-stnodes" min="0" max="512" value="8"></div>
+        <div class="field"><label for="w-scheme">Protection scheme</label><select id="w-scheme"></select></div>
+      </div>
+      <div class="card" id="storage-summary"></div>
+    </div>
+    <div class="step-live" id="live-storage"></div>
+  </section>
+
+  <!-- ============ 4. RESULTS ============ -->
+  <section class="step" data-step="3" hidden>
+    <div class="step-head">
+      <h2>Results</h2>
+      <p>The whole solution: compute, fabric, storage, facility and rack elevations.</p>
+    </div>
+    <div id="results"></div>
+  </section>
+</main>
+
+<div class="wizard-nav">
+  <button id="w-back">← Back</button>
+  <span class="wizard-pos" id="w-pos"></span>
+  <button id="w-next" class="primary">Next →</button>
+</div>
+
+<script src="catalog.js"></script>
+<script src="sizing.js"></script>
+<script src="compute-catalog.js"></script>
+<script src="inference.js"></script>
+<script src="ra-rack.js"></script>
+<script src="wizard.js"></script>
+</body>
+</html>

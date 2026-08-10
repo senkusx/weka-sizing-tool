@@ -8,6 +8,8 @@ halves of the solution:
   racks, power, weight, cooling load and fabric out.
 - **Storage** (`index.html`) — WEKA cluster sizing from a usable-capacity and/or
   throughput target, with the full BOM, memory budget and constraint checks.
+- **Guided journey** (`wizard.html`) — compute → networking → storage → results,
+  with the full solution summary and rack elevations on the final page.
 - **Rack elevations** (`rack.html`) — to-scale front and rear views with fabric
   cabling.
 
@@ -79,6 +81,8 @@ leaves the browser, so it is safe to run on an internal network without egress.
 | `app.js` | Form wiring, rendering, charts, CSV export |
 | `rack.html` / `rack.css` / `rack.js` | Rack elevation page — front/rear views and fabric cabling |
 | `compute.html` / `compute-app.js` | Compute sizing page |
+| `wizard.html` / `wizard.css` / `wizard.js` | Guided four-step journey |
+| `ra-rack.js` | Reference-architecture rack elevations (compute, fabric, storage, mgmt) |
 | `compute-catalog.js` | GPUs, GPU nodes, fabric, rack rules and model catalog from the RA |
 | `inference.js` | Inference sizing engine — pure functions, no DOM |
 | `Dockerfile` / `nginx.conf` / `security-headers.conf` | Container image and web server config |
@@ -155,6 +159,15 @@ throughput while `params` drives memory.
   prefill. These are the least-grounded numbers in the tool: they reflect typical
   vLLM/TensorRT-LLM behaviour, not a benchmark of this architecture. Validate
   throughput before committing to an SLA.
+- **WEKApod form factor** — WEKA ships the Nitro 150 as a **2U four-node chassis**
+  (56 TLC drives, 720/186 GB/s, 18M IOPS per 8-node appliance). The reference
+  architecture elevation draws one rack unit per node, which overstates the storage
+  rack by a factor of two; the tool uses the real chassis. Power and weight per node
+  stay at the RA's 800 W / 31.2 kg since WEKA does not publish them.
+- **DGX B300** is 10U, 14.5 kW, 168 kg with 12x 3.3 kW PSUs, per NVIDIA's datasheet.
+  Its system memory figure is the published maximum.
+- **DLC chassis height** — the liquid-cooled B300 is a 4U chassis, which is the only
+  way the liquid elevation fits eight nodes plus a CDU into 48U. Air-cooled is 8U.
 - **H200 and L40S node power** is rolled up from BOM components rather than stated
   as a total; their weights are estimates. B300 and RTX PRO 6000 node figures are
   stated directly in the elevations.
