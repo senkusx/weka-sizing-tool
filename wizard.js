@@ -17,11 +17,14 @@ function fill() {
   $w('w-model').innerHTML = Object.entries(MODELS).map(([k, v]) => `<option value="${k}">${escW(v.label)}</option>`).join('');
   $w('w-precision').innerHTML = Object.entries(PRECISIONS).map(([k, v]) => `<option value="${k}">${escW(v.label)}</option>`).join('');
   $w('w-scheme').innerHTML = PROTECTION_SCHEMES.map((s) => `<option value="${s.id}">${s.id} — ${(s.efficiency * 100).toFixed(0)}% efficient</option>`).join('');
+  $w('w-pod').innerHTML = Object.entries(WEKAPODS)
+    .map(([k, v]) => `<option value="${k}">${escW(v.label)}</option>`).join('');
+  $w('w-pod').value = 'nitro-155';
   $w('w-profile').value = 'regional';
   $w('w-node').value = 'smc-b300';
   $w('w-model').value = 'llama31-70b';
   $w('w-precision').value = 'fp8';
-  $w('w-scheme').value = '8+2';
+  $w('w-scheme').value = WEKAPOD_DEFAULTS.schemeId;
 
   $w('stepper').innerHTML = STEPS.map((s, i) =>
     `<button data-goto="${i}"><span class="num">${i + 1}</span>${escW(s)}</button>`).join('');
@@ -68,47 +71,29 @@ function computeAll() {
   });
   if (inf.error) return { error: inf.error, inf };
 
-  // --- storage ---
+  // --- storage: sized natively on the chosen WEKApod appliance ---
+  const podKey = $w('w-pod').value;
+  const schemeId = $w('w-scheme').value;
   const mode = $w('w-stmode').value;
   const gpus = inf.gpusDeployed;
   let stNodes;
   if (mode === 'ratio') {
-    // WEKA publishes 720 GB/s read per 8-node Nitro appliance, so 90 GB/s a node.
-    const needGBs = gpus * (+$w('w-gbpergpu').value);
-    stNodes = Math.max(8, Math.ceil(needGBs / (INFRA.wekapod.readGBs / INFRA.wekapod.perApplianceNodes)));
+    stNodes = wekapodNodesFor({ podKey, targetReadGBs: gpus * (+$w('w-gbpergpu').value), schemeId });
   } else if (mode === 'capacity') {
-    // Size the WEKA cluster properly with the storage engine, then map to pods.
-    stNodes = null;
+    stNodes = wekapodNodesFor({ podKey, targetTB: Math.max(10, +$w('w-captb').value || 10), schemeId });
   } else {
-    stNodes = Math.max(0, +$w('w-stnodes').value || 0);
+    stNodes = Math.max(WEKAPODS[podKey].minNodes, +$w('w-stnodes').value || 8);
   }
-
-  let weka = null;
-  if (mode === 'capacity') {
-    weka = size({
-      serverKey: 'generic-1u', driveKey: 'gen-15.36-g5', nicKey: 'cx7-400-1p-eth',
-      switchKey: 'sn5600', nicCount: 2, cpuId: 'g-64', schemeId: $w('w-scheme').value,
-      workloadId: 'ai-training', drivesPerNode: 10, ramGB: 512, hotSpares: 1,
-      protocols: true, rdma: true, targetTB: Math.max(10, +$w('w-captb').value || 10),
-      targetReadGBps: 0, manualNodes: null,
-    });
-    stNodes = Math.max(8, weka.nodes);
-  } else {
-    weka = size({
-      serverKey: 'generic-1u', driveKey: 'gen-15.36-g5', nicKey: 'cx7-400-1p-eth',
-      switchKey: 'sn5600', nicCount: 2, cpuId: 'g-64', schemeId: $w('w-scheme').value,
-      workloadId: 'ai-training', drivesPerNode: 10, ramGB: 512, hotSpares: 1,
-      protocols: true, rdma: true, targetTB: 0, targetReadGBps: 0, manualNodes: Math.max(6, stNodes),
-    });
-  }
+  const weka = sizeWekapod({ podKey, nodes: stNodes, schemeId });
+  stNodes = weka.nodes;
 
   const fac = sizeFacility({
     gpuNodes: inf.nodes, nodeKey, coolingKey,
-    profileKey: $w('w-profile').value, storageNodes: stNodes,
+    profileKey: $w('w-profile').value, storageNodes: stNodes, storagePodKey: podKey,
   });
   const layout = buildRALayout(fac, { gpuNodes: inf.nodes });
 
-  return { inf, fac, layout, weka, stNodes, mode, nodeKey, coolingKey, basis, perRack };
+  return { inf, fac, layout, weka, stNodes, mode, podKey, nodeKey, coolingKey, basis, perRack };
 }
 
 /* ---------- live strips under each step ---------- */
@@ -147,13 +132,17 @@ function renderLive() {
     [nfW(fac.fabricRacks), 'Fabric racks'],
   ]);
 
+  const w = s.weka;
   $w('live-storage').innerHTML = tiles([
-    [nfW(s.stNodes), 'WEKApod nodes'],
-    [nfW(fac.storage.chassis), '2U chassis'],
-    [`${nfW(s.weka.capacity.netTB, 0)}<small>TB</small>`, 'Usable capacity'],
-    [`${nfW(s.weka.cluster.read, 0)}<small>GB/s</small>`, 'Read throughput'],
-    [`${nfW(s.weka.cluster.read / Math.max(1, s.inf.gpusDeployed), 1)}<small>GB/s</small>`, 'Per GPU'],
+    [nfW(w.nodes), `${escW(w.pod.model)} nodes`],
+    [`${nfW(w.netTB, 0)}<small>TB</small>`, 'Usable capacity'],
+    [`${nfW(w.readGBs, 0)}<small>GB/s</small>`, 'Read throughput'],
+    [`${nfW(w.readIops / 1e6, 1)}<small>M</small>`, 'Read IOPS'],
+    [`${nfW(w.readGBs / Math.max(1, inf.gpusDeployed), 1)}<small>GB/s</small>`, 'Per GPU'],
+    [`${nfW(w.ru)}<small>U</small>`, 'Rack units'],
   ]);
+  const pod = WEKAPODS[$w('w-pod').value];
+  $w('w-pod-hint').textContent = `${pod.ru}U · ${pod.drives} × ${pod.driveTB} TB ${pod.driveType} · ${pod.cpu} · ${nfW(pod.ramGB)} GB · ${pod.net} · ${pod.readGBs}/${pod.writeGBs} GB/s per node`;
 
   // Networking card detail.
   $w('net-summary').innerHTML = `<h2>Derived fabric</h2>
@@ -166,18 +155,33 @@ function renderLive() {
     </tbody></table></div>
     <div class="card-note">Counts are derived from the oversubscription rules above, not from a port map. On the 2 MW reference design this model derives 29 SN5610 against the 32 in the elevation.</div>`;
 
-  const st = s.weka;
-  $w('storage-summary').innerHTML = `<h2>WEKA cluster</h2>
-    <div class="table-scroll"><table><tbody>
-      <tr><td>WEKApod Nitro nodes</td><td class="num">${nfW(s.stNodes)}</td></tr>
-      <tr><td>2U four-node chassis</td><td class="num">${nfW(fac.storage.chassis)}</td></tr>
-      <tr><td>Rack units</td><td class="num">${nfW(fac.storage.u)} U</td></tr>
-      <tr><td>Usable capacity</td><td class="num">${nfW(st.capacity.netTB, 0)} TB</td></tr>
-      <tr><td>Protection</td><td class="num">${escW(st.scheme.id)} · ${(st.scheme.efficiency * 100).toFixed(0)}%</td></tr>
-      <tr><td>Read / write</td><td class="num">${nfW(st.cluster.read, 0)} / ${nfW(st.cluster.write, 0)} GB/s</td></tr>
-      <tr><td>Storage power</td><td class="num">${nfW(fac.power.storageW / 1000, 1)} kW</td></tr>
-    </tbody></table></div>
-    <div class="card-note">Capacity and protection come from the WEKA engine on the <a href="index.html">storage page</a>; the appliance form factor is WEKA's published 2U four-node Nitro chassis.</div>`;
+  $w('storage-summary').innerHTML = storageTable(w, fac);
+}
+
+/* Shared storage detail, used on the storage step and again in the results. */
+function storageTable(w, fac) {
+  const p = w.pod;
+  const rows = [
+    ['Appliance', `${p.family} — ${p.model}`],
+    ['Nodes', `${nfW(w.nodes)} × ${p.ru}U = ${nfW(w.ru)}U`],
+    ['NVMe per node', `${p.drives} × ${p.driveTB} TB ${p.driveType}`],
+    p.writeTier ? ['Write tier', p.writeTier] : null,
+    ['CPU / memory', `${p.cpu} · ${nfW(p.ramGB)} GB`],
+    ['Data network', `${p.net} — ${nfW(w.ports)} × ${p.portGb} Gb total`],
+    ['Raw capacity', `${nfW(w.rawTB, 0)} TB`],
+    ['Usable capacity', `${nfW(w.netTB, 0)} TB`],
+    ['Protection', `${w.scheme.id} + ${w.spares} virtual hot spare${w.spares === 1 ? '' : 's'} · ${(w.scheme.efficiency * 100).toFixed(0)}% efficient`],
+    ['Read / write throughput', `${nfW(w.readGBs, 0)} / ${nfW(w.writeGBs, 0)} GB/s`],
+    ['Read / write IOPS', `${nfW(w.readIops / 1e6, 1)}M / ${nfW(w.writeIops / 1e6, 1)}M`],
+    ['Power', `${nfW(w.watts / 1000, 1)} kW`],
+    ['Weight', `${nfW(w.weightKg, 0)} kg`],
+    ['Storage racks', nfW(fac.storageRacks)],
+  ].filter(Boolean);
+  const ref = p.ref ? `<div class="card-note">Validated against WEKA's published configuration: ${p.ref.nodes} × ${escW(p.model)} = ${p.ref.netTB} TB usable at 5D+2P+1VHS, ${p.ref.readGBs}/${p.ref.writeGBs} GB/s, ${p.ref.ru}RU, ~${p.ref.kw} kW, ~${p.ref.kg} kg. This tool reproduces the capacity, rack units, power and weight exactly.</div>`
+    : `<div class="card-note">${escW(p.src)}</div>`;
+  return `<h2>WEKApod storage</h2><div class="table-scroll"><table><tbody>
+    ${rows.map((r) => `<tr><td>${escW(r[0])}</td><td class="num">${escW(r[1])}</td></tr>`).join('')}
+  </tbody></table></div>${ref}`;
 }
 
 /* ---------- results ---------- */
@@ -229,7 +233,7 @@ function renderResults() {
       <tbody>
         <tr><td><strong>Compute</strong></td><td>${nfW(inf.nodes)} × ${escW(inf.node.label)} (${escW(inf.node.sublabel)}), ${nfW(inf.gpusDeployed)} GPUs, TP ${inf.tp}, ${nfW(inf.deployedReplicas)} replicas</td><td class="num">${nfW(p.gpuNodeW / 1000, 1)} kW</td><td class="num">${fac.computeRacks}</td></tr>
         <tr><td><strong>Networking</strong></td><td>${fac.fabric.ewLeaves + fac.fabric.ewSpines} SN5610 east-west (${fac.fabric.ewOversub}:1), ${fac.fabric.nsLeaves + fac.fabric.nsSpines} north-south (${fac.fabric.nsOversub}:1), ${fac.fabric.oobLeaves + fac.fabric.oobSpines} OOB</td><td class="num">${nfW(p.switchW / 1000, 1)} kW</td><td class="num">${fac.fabricRacks}</td></tr>
-        <tr><td><strong>Storage</strong></td><td>${nfW(s.stNodes)} WEKApod Nitro nodes in ${nfW(fac.storage.chassis)} × 2U chassis · ${nfW(weka.capacity.netTB, 0)} TB usable · ${escW(weka.scheme.id)} · plus ${fac.tier2Count} × Tier 2 block storage</td><td class="num">${nfW(p.storageW / 1000, 1)} kW</td><td class="num">${fac.storageRacks}</td></tr>
+        <tr><td><strong>Storage</strong></td><td>${nfW(weka.nodes)} × ${escW(weka.pod.model)} (${nfW(weka.ru)}U) · ${nfW(weka.netTB, 0)} TB usable at ${escW(weka.scheme.id)}+${weka.spares}VHS · ${nfW(weka.readGBs, 0)}/${nfW(weka.writeGBs, 0)} GB/s · plus ${fac.tier2Count} × Tier 2 block storage</td><td class="num">${nfW(p.storageW / 1000, 1)} kW</td><td class="num">${fac.storageRacks}</td></tr>
         <tr><td><strong>Platform</strong></td><td>Management rack — routers, platform servers, Tier 3, OOB firewalls, break-glass</td><td class="num">${nfW(p.mgmtW / 1000, 1)} kW</td><td class="num">1</td></tr>
         ${fac.cooling.cdu ? `<tr><td><strong>Cooling</strong></td><td>${fac.computeRacks} × ${escW(INFRA.cdu.label)}</td><td class="num">${nfW(p.cduW / 1000, 1)} kW</td><td class="num">—</td></tr>` : ''}
         <tr><td colspan="2"><strong>Total</strong></td><td class="num"><strong>${nfW(p.totalW / 1000, 1)} kW</strong></td><td class="num"><strong>${fac.totalRacks}</strong></td></tr>
@@ -245,7 +249,7 @@ function renderResults() {
       <div class="tile"><div class="v">${nfW(inf.ttftMs, 0)}<small>ms</small></div><div class="k">TTFT</div></div>
       <div class="tile"><div class="v">${bigW(inf.reqPerHour)}</div><div class="k">Requests / hour</div></div>
       <div class="tile"><div class="v">${nfW(inf.deployedConcurrency)}</div><div class="k">Concurrency served</div></div>
-      <div class="tile"><div class="v">${nfW(weka.cluster.read / Math.max(1, inf.gpusDeployed), 1)}<small>GB/s</small></div><div class="k">Storage read per GPU</div></div>
+      <div class="tile"><div class="v">${nfW(weka.readGBs / Math.max(1, inf.gpusDeployed), 1)}<small>GB/s</small></div><div class="k">Storage read per GPU</div></div>
       <div class="tile"><div class="v">${nfW(fac.weight.totalKg / 1000, 1)}<small>t</small></div><div class="k">Total IT weight</div></div>
       <div class="tile"><div class="v">${bigW(fac.coolingLoadBTU)}<small>BTU/hr</small></div><div class="k">Heat rejection</div></div>
       <div class="tile"><div class="v">${nfW(p.rackWithTier2W / 1000, 1)}<small>kW</small></div><div class="k">Rack w/ Tier 2 (first ${fac.tier2Count})</div></div>
@@ -253,6 +257,8 @@ function renderResults() {
       <div class="tile"><div class="v">${escW(RACK.feed)}</div><div class="k">Per-rack feed</div></div>
     </div>
   </section>
+
+  <section class="card">${storageTable(weka, fac)}</section>
 
   ${inf.notes.length ? `<section class="card"><h2>Design checks</h2>
     ${[...inf.notes].sort((a, b) => ({ critical: 0, warning: 1, info: 2 }[a.level] - { critical: 0, warning: 1, info: 2 }[b.level]))
@@ -350,9 +356,14 @@ function exportCSV() {
     ['Out-of-band', `${fac.fabric.oobLeaves} leaf + ${fac.fabric.oobSpines} spine`],
     [],
     ['Storage'],
-    ['WEKApod nodes', stNodes], ['2U chassis', fac.storage.chassis],
-    ['Usable TB', weka.capacity.netTB.toFixed(0)], ['Protection', weka.scheme.id],
-    ['Read GB/s', weka.cluster.read.toFixed(0)], ['Write GB/s', weka.cluster.write.toFixed(0)],
+    ['Appliance', `${weka.pod.family} ${weka.pod.model}`],
+    ['Nodes', weka.nodes], ['Rack units', weka.ru],
+    ['NVMe per node', `${weka.pod.drives} x ${weka.pod.driveTB} TB ${weka.pod.driveType}`],
+    ['Raw TB', weka.rawTB.toFixed(0)], ['Usable TB', weka.netTB.toFixed(0)],
+    ['Protection', `${weka.scheme.id}+${weka.spares}VHS`],
+    ['Read GB/s', weka.readGBs.toFixed(0)], ['Write GB/s', weka.writeGBs.toFixed(0)],
+    ['Read IOPS', Math.round(weka.readIops)], ['Write IOPS', Math.round(weka.writeIops)],
+    ['Storage kW', (weka.watts / 1000).toFixed(1)], ['Storage kg', weka.weightKg.toFixed(0)],
     [],
     ['Facility'],
     ['Cooling', fac.cooling.label], ['Total racks', fac.totalRacks],

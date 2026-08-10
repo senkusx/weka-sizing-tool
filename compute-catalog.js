@@ -117,17 +117,12 @@ const INFRA = {
   'cpu-node': { label: 'CPU Compute Node', model: 'AS-1125HS-TNR', ru: 1, watts: 1070, weightKg: 23.1, c13: 2 },
   'tier2': { label: 'Tier 2 Block Storage', model: 'SSG-641E-E1CR36L', ru: 4, watts: 1188, weightKg: 98, c19: 2 },
   'tier3': { label: 'Tier 3 Storage', model: 'Synology RS822RP+', ru: 2, watts: 150, weightKg: 10.88, c13: 2 },
-  // WEKA ships the Nitro 150 as a 2U four-node chassis (56 TLC drives per
-  // appliance), so a node occupies half a rack unit rather than a whole one.
-  // The reference architecture elevation draws one U per node, which overstates
-  // the storage rack by a factor of two. Power and weight are the RA's figures;
-  // WEKA does not publish per-node power.
+  // Placeholder kept so existing power roll-ups resolve; the real catalogue is
+  // WEKAPODS below, which carries per-model capacity and performance.
   'wekapod': {
-    label: 'WEKApod Nitro node', model: 'WEKApod Nitro 150', ru: 0.5, nodesPerChassis: 4, chassisRu: 2,
-    watts: 800, weightKg: 31.2, c13: 2,
-    perApplianceNodes: 8, readGBs: 720, writeGBs: 186, iops: 18e6, drivesPerChassis: 56,
-    net: 'Dual-port NVIDIA ConnectX, 800 Gb/s per node',
-    src: 'WEKA published: 2U 4-node chassis, 56 TLC drives, 720/186 GB/s, 18M IOPS. Power and weight from the RA sheet.',
+    label: 'WEKApod node', model: 'WEKApod', ru: 1, watts: 800, weightKg: 9.25, c13: 2,
+    nodesPerChassis: 1, chassisRu: 1, readGBs: 70, writeGBs: 40, perApplianceNodes: 8,
+    src: 'WEKA WPS155-SAE: 8 nodes in 8RU, ~6.4 kW, ~74 kg',
   },
   'oob-fw': { label: 'OOB Firewall', model: 'Juniper SRX1500', ru: 1, watts: 150, weightKg: 7.3, c13: 2 },
   'serial': { label: 'Serial Switch', model: 'Perle IOLAN SCS48C', ru: 1, watts: 23, weightKg: 3.6, c13: 1 },
@@ -153,6 +148,89 @@ const FABRIC_RULES = {
   // carries 2x400G links, so a 64-cage SN5610 presents 128 logical 400G ports.
   breakout: 2,
 };
+
+/* ---------- WEKApod appliance catalogue ----------
+   From WEKA's own NeuralMesh / WEKApod material. The Nitro is a 1U server, so
+   eight of them occupy 8 rack units — the deck states "Total Nodes 8 / Rack
+   Units 8" outright. Per-node power (800 W) agrees with the InferX sheet; the
+   weight does not, and WEKA's ~74 kg for eight nodes is used instead of the
+   sheet's 31.2 kg each.
+
+   Prime models carry two capacity tiers: a small TLC write/metadata tier plus a
+   large eTLC or QLC capacity tier. Usable capacity is sized on the capacity
+   tier, which is what the family table quotes. */
+const WEKAPODS = {
+  'nitro-155': {
+    family: 'Nitro', model: 'WPS155-SAE', label: 'WEKApod Nitro — 14 × 7.68 TB TLC',
+    ru: 1, drives: 14, driveTB: 7.68, driveType: 'E3.S TLC Gen5',
+    cpu: 'AMD EPYC 9534 64C/128T', ramGB: 768, bootDesc: '2 × 960 GB BOSS',
+    net: '2 × NVIDIA CX-7 400Gb OSFP', ports: 2, portGb: 400, mgmt: '2 × 1GbE',
+    readGBs: 71, writeGBs: 32, readIops: 2.25e6, writeIops: 0.5875e6,
+    watts: 800, weightKg: 9.25, minNodes: 8,
+    ref: { nodes: 8, netTB: 484, readGBs: 568, writeGBs: 256, readIops: 18e6, writeIops: 4.7e6, ru: 8, kw: 6.4, kg: 74 },
+    src: 'WEKA WPS155-SAE: 8 nodes = 484 TB usable at 5D+2P+1VHS, 568/256 GB/s, 18M/4.7M IOPS, 8RU, ~74 kg, ~6.4 kW',
+  },
+  'nitro-175': {
+    family: 'Nitro', model: 'WPS175-SAE', label: 'WEKApod Nitro — 14 × 15.36 TB TLC',
+    ru: 1, drives: 14, driveTB: 15.36, driveType: 'E3.S TLC Gen5',
+    cpu: 'AMD EPYC 9534 64C/128T', ramGB: 768, bootDesc: '2 × 960 GB BOSS',
+    net: '2 × NVIDIA CX-7 400Gb OSFP', ports: 2, portGb: 400, mgmt: '2 × 1GbE',
+    readGBs: 71, writeGBs: 32, readIops: 2.25e6, writeIops: 0.5875e6,
+    watts: 800, weightKg: 9.25, minNodes: 8,
+    ref: { nodes: 8, netTB: 968, readGBs: 568, writeGBs: 256, readIops: 18e6, writeIops: 4.7e6, ru: 8, kw: 6.4, kg: 74 },
+    src: 'WEKA WPS175-SAE: 8 nodes = 968 TB usable at 5D+2P+1VHS',
+  },
+  'nitro-30': {
+    family: 'Nitro', model: 'WEKApod Nitro 30TB', label: 'WEKApod Nitro — 14 × 30 TB TLC',
+    ru: 1, drives: 14, driveTB: 30, driveType: 'E3.S TLC Gen5',
+    cpu: 'AMD EPYC 9534 64C/128T', ramGB: 768, bootDesc: '2 × 960 GB BOSS',
+    net: '2 × NVIDIA CX-7 400Gb OSFP', ports: 2, portGb: 400, mgmt: '2 × 1GbE',
+    readGBs: 71, writeGBs: 32, readIops: 2.25e6, writeIops: 0.5875e6,
+    watts: 850, weightKg: 9.25, minNodes: 8,
+    src: 'WEKA Nitro family table: 14 × 7.68 TB–30 TB E3.S TLC, 70/40 GB/s per node',
+  },
+  'prime-2118-30': {
+    family: 'Prime', model: 'Prime 2118', label: 'WEKApod Prime 2118 — 18 × 30 TB eTLC',
+    ru: 1, drives: 18, driveTB: 30, driveType: 'E3.S eTLC', writeTier: '2 × 6.4 TB E3.S TLC',
+    cpu: '2 × Intel Sierra Forest 64C', ramGB: 1024, bootDesc: '2 × 960 GB BOSS',
+    net: '2 × NVIDIA CX-7 400Gb OSFP', ports: 2, portGb: 400, mgmt: '2 × 1GbE',
+    readGBs: 40, writeGBs: 20, readIops: 1.3e6, writeIops: 0.35e6,
+    watts: 900, weightKg: 12, minNodes: 8,
+    src: 'WEKA Prime 2118 family table; performance includes data reduction',
+  },
+  'prime-2118-60': {
+    family: 'Prime', model: 'Prime 2118', label: 'WEKApod Prime 2118 — 18 × 60 TB eTLC',
+    ru: 1, drives: 18, driveTB: 60, driveType: 'E3.S eTLC', writeTier: '2 × 6.4 TB E3.S TLC',
+    cpu: '2 × Intel Sierra Forest 64C', ramGB: 1024, bootDesc: '2 × 960 GB BOSS',
+    net: '2 × NVIDIA CX-7 400Gb OSFP', ports: 2, portGb: 400, mgmt: '2 × 1GbE',
+    readGBs: 40, writeGBs: 20, readIops: 1.3e6, writeIops: 0.35e6,
+    watts: 950, weightKg: 12, minNodes: 8,
+    src: 'WEKA Prime 2118 family table',
+  },
+  'prime-2218-60': {
+    family: 'Prime', model: 'Prime 2218', label: 'WEKApod Prime 2218 — 18 × 60 TB QLC',
+    ru: 2, drives: 18, driveTB: 60, driveType: 'U.2 QLC', writeTier: '2 × 6.4 TB U.2 TLC',
+    cpu: '2 × Intel Sierra Forest 64C', ramGB: 1024, bootDesc: '2 × 1.92 TB M.2',
+    net: '2 × NVIDIA CX-7 400Gb OSFP', ports: 2, portGb: 400, mgmt: '2 × 1GbE',
+    readGBs: 40, writeGBs: 20, readIops: 1.3e6, writeIops: 0.35e6,
+    watts: 950, weightKg: 20, minNodes: 8,
+    src: 'WEKA Prime 2218/2222 family table; 2U chassis with U.2 QLC capacity tier',
+  },
+  'prime-2218-120': {
+    family: 'Prime', model: 'Prime 2218', label: 'WEKApod Prime 2218 — 18 × 120 TB QLC',
+    ru: 2, drives: 18, driveTB: 120, driveType: 'U.2 QLC', writeTier: '2 × 6.4 TB U.2 TLC',
+    cpu: '2 × Intel Sierra Forest 64C', ramGB: 1024, bootDesc: '2 × 1.92 TB M.2',
+    net: '2 × NVIDIA CX-7 400Gb OSFP', ports: 2, portGb: 400, mgmt: '2 × 1GbE',
+    readGBs: 40, writeGBs: 20, readIops: 1.3e6, writeIops: 0.35e6,
+    watts: 1000, weightKg: 20, minNodes: 8,
+    src: 'WEKA Prime 2218/2222 family table — 55 PB in a 42U rack at this density',
+  },
+};
+
+/* WEKA sizes the WEKApod at 5D+2P with one virtual hot spare, and both published
+   worked examples (484 TB and 968 TB) fall straight out of the tool's existing
+   net-capacity formula at that setting. */
+const WEKAPOD_DEFAULTS = { schemeId: '5+2', hotSpares: 1, minNodes: 8 };
 
 /* ---------- rack and facility rules ---------- */
 /* The elevations put exactly 2 GPU nodes in every air-cooled compute rack

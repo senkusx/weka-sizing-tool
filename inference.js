@@ -219,7 +219,7 @@ function sizeInference(input) {
    per air-cooled rack, eight plus a 250 kW CDU per liquid-cooled rack, one
    fixed management rack, and a dedicated switch-fabric rack for regional and
    core profiles. */
-function sizeFacility({ gpuNodes, nodeKey, coolingKey, profileKey, storageNodes }) {
+function sizeFacility({ gpuNodes, nodeKey, coolingKey, profileKey, storageNodes, storagePodKey }) {
   const node = GPU_NODES[nodeKey];
   const cooling = RACK.cooling[coolingKey];
   const profile = RA_PROFILES[profileKey];
@@ -262,9 +262,10 @@ function sizeFacility({ gpuNodes, nodeKey, coolingKey, profileKey, storageNodes 
   const fabricRacks = profile.dedicatedFabricRack
     ? Math.max(1, Math.ceil(switchU / (RACK.totalU - 2))) : 0;
 
-  // Storage racks are sized on chassis, not nodes: four nodes share a 2U box.
-  const wekaChassis = Math.ceil((storageNodes || 0) / INFRA.wekapod.nodesPerChassis);
-  const wekaU = wekaChassis * INFRA.wekapod.chassisRu;
+  // WEKApod Nitro is a 1U server; Prime 2218 is 2U. The caller passes the model
+  // so the storage rack is drawn and sized at the right height.
+  const podRu = (storagePodKey && WEKAPODS[storagePodKey] ? WEKAPODS[storagePodKey].ru : 1);
+  const wekaU = (storageNodes || 0) * podRu;
   const storageRacks = profile.storage === 'wekapod' && storageNodes
     ? Math.max(1, Math.ceil(wekaU / (RACK.totalU - 8))) : 0;
 
@@ -278,13 +279,15 @@ function sizeFacility({ gpuNodes, nodeKey, coolingKey, profileKey, storageNodes 
   const tier2W = tier2Count * INFRA.tier2.watts;
   const switchW = (ewLeaves + ewSpines + nsLeaves + nsSpines) * FABRIC.sn5610.watts
     + oobLeaves * FABRIC.sn2201.watts + oobSpines * FABRIC.sn4600c.watts;
-  const storageW = (storageNodes || 0) * INFRA.wekapod.watts;
+  const podW = (storagePodKey && WEKAPODS[storagePodKey] ? WEKAPODS[storagePodKey].watts : INFRA.wekapod.watts);
+  const storageW = (storageNodes || 0) * podW;
   const mgmtW = RACK.mgmtRack.watts;
   const totalW = gpuNodeW + cduW + tier2W + switchW + storageW + mgmtW;
 
   // Weight.
   const gpuNodeKg = gpuNodes * node.weightKg;
-  const storageKg = (storageNodes || 0) * INFRA.wekapod.weightKg;
+  const podKg = (storagePodKey && WEKAPODS[storagePodKey] ? WEKAPODS[storagePodKey].weightKg : INFRA.wekapod.weightKg);
+  const storageKg = (storageNodes || 0) * podKg;
   const switchKg = (ewLeaves + ewSpines + nsLeaves + nsSpines) * FABRIC.sn5610.weightKg
     + oobLeaves * FABRIC.sn2201.weightKg + oobSpines * FABRIC.sn4600c.weightKg;
   const totalKg = gpuNodeKg + storageKg + switchKg + RACK.mgmtRack.weightKg
@@ -302,7 +305,7 @@ function sizeFacility({ gpuNodes, nodeKey, coolingKey, profileKey, storageNodes 
   return {
     node, cooling, profile,
     computeRacks, fabricRacks, storageRacks, mgmtRacks, totalRacks,
-    storage: { nodes: storageNodes || 0, chassis: wekaChassis, u: wekaU },
+    storage: { nodes: storageNodes || 0, u: wekaU, podRu, podKey: storagePodKey || null },
     fabric: { ewLeaves, ewSpines, nsLeaves, nsSpines, oobLeaves, oobSpines, switchU, ewPorts, nsPorts, oobPorts,
       ewOversub: FABRIC_RULES.eastWestOversub, nsOversub: FABRIC_RULES.northSouthOversub },
     power: { gpuNodeW, cduW, tier2W, switchW, storageW, mgmtW, totalW,
@@ -312,6 +315,49 @@ function sizeFacility({ gpuNodes, nodeKey, coolingKey, profileKey, storageNodes 
     rackU, rackUsedPct: (rackU / RACK.totalU) * 100,
     coolingLoadBTU: totalW * 3.412,
   };
+}
+
+/* ---------- WEKApod storage sizing ----------
+   Capacity uses the same published net-capacity formula as the storage page.
+   At WEKA's own 5D+2P+1VHS setting it reproduces both of their worked examples
+   exactly: 8 x WPS155-SAE = 484 TB, 8 x WPS175-SAE = 968 TB. */
+function sizeWekapod({ podKey, nodes, schemeId, hotSpares }) {
+  const pod = WEKAPODS[podKey];
+  const scheme = PROTECTION_SCHEMES.find((x) => x.id === (schemeId || WEKAPOD_DEFAULTS.schemeId));
+  const spares = hotSpares == null ? WEKAPOD_DEFAULTS.hotSpares : hotSpares;
+  const n = Math.max(pod.minNodes, Math.round(nodes) || pod.minNodes);
+
+  const rawTB = n * pod.drives * pod.driveTB;
+  const netTB = rawTB * ((n - spares) / n) * scheme.efficiency * WEKA.fsOverhead;
+
+  const notes = [];
+  if (scheme.stripe > n) {
+    notes.push({ level: 'critical', text: `A ${scheme.id} stripe needs ${scheme.stripe} failure domains but there are only ${n} WEKApod nodes.` });
+  }
+  if (n < pod.minNodes) {
+    notes.push({ level: 'warning', text: `WEKApod starts at ${pod.minNodes} nodes.` });
+  }
+
+  return {
+    pod, scheme, spares, nodes: n,
+    rawTB, netTB,
+    readGBs: n * pod.readGBs, writeGBs: n * pod.writeGBs,
+    readIops: n * pod.readIops, writeIops: n * pod.writeIops,
+    ru: n * pod.ru, watts: n * pod.watts, weightKg: n * pod.weightKg,
+    ports: n * pod.ports, mgmtPorts: n * 2,
+    notes,
+  };
+}
+
+/* Nodes needed to hit a usable-capacity or read-throughput target. */
+function wekapodNodesFor({ podKey, targetTB, targetReadGBs, schemeId, hotSpares }) {
+  const pod = WEKAPODS[podKey];
+  let n = pod.minNodes;
+  for (; n <= 4096; n++) {
+    const r = sizeWekapod({ podKey, nodes: n, schemeId, hotSpares });
+    if ((!targetTB || r.netTB >= targetTB) && (!targetReadGBs || r.readGBs >= targetReadGBs)) return n;
+  }
+  return n;
 }
 
 /* ---------- rack layout ----------
@@ -418,15 +464,19 @@ function buildRALayout(f, opts) {
   }
 
   // --- storage rack(s) ---
-  if (f.storageRacks > 0 && f.storage.chassis > 0) {
-    let left = f.storage.chassis;
-    for (let r = 0; r < f.storageRacks; r++) {
+  if (f.storageRacks > 0 && f.storage.nodes > 0) {
+    const pod = WEKAPODS[f.storage.podKey] || null;
+    const podRu = f.storage.podRu || 1;
+    const podName = pod ? pod.model : 'WEKApod';
+    const podDetail = pod ? `${pod.drives} × ${pod.driveTB} TB` : 'WEKApod node';
+    let placed = 0;
+    for (let r = 0; r < f.storageRacks && placed < f.storage.nodes; r++) {
       const d = []; let u = totalU;
-      while (left > 0 && u - INFRA.wekapod.chassisRu + 1 >= 1) {
-        const n = Math.min(INFRA.wekapod.nodesPerChassis, f.storage.nodes - (f.storage.chassis - left) * INFRA.wekapod.nodesPerChassis);
-        d.push(dev(u, INFRA.wekapod.chassisRu, 'wekapod',
-          `WEKApod chassis ${f.storage.chassis - left + 1}`, `${n} nodes`, { nodes: n }));
-        u -= INFRA.wekapod.chassisRu; left--;
+      while (placed < f.storage.nodes && u - podRu + 1 >= 1) {
+        placed++;
+        d.push(dev(u, podRu, 'wekapod', `${podName} ${placed}`, podDetail,
+          { drives: pod ? pod.drives : 14 }));
+        u -= podRu;
       }
       racks.push({ name: f.storageRacks > 1 ? `Storage rack ${r + 1}` : 'POSIX/S3/AI storage rack', kind: 'storage', devices: d });
     }
@@ -436,5 +486,5 @@ function buildRALayout(f, opts) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { sizeInference, sizeFacility, buildRALayout, kvBytesPerToken, weightBytes, replicaThroughput, minTensorParallel };
+  module.exports = { sizeInference, sizeFacility, buildRALayout, sizeWekapod, wekapodNodesFor, kvBytesPerToken, weightBytes, replicaThroughput, minTensorParallel };
 }

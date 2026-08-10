@@ -120,6 +120,8 @@
     <div class="step-grid">
       <div class="card">
         <h2>WEKA tier</h2>
+        <div class="field"><label for="w-pod">WEKApod model</label><select id="w-pod"></select>
+          <span class="hint" id="w-pod-hint"></span></div>
         <div class="field"><label for="w-stmode">Sizing basis</label>
           <select id="w-stmode">
             <option value="ratio">Throughput per GPU — feed the fleet</option>
@@ -132,9 +134,10 @@
           <span class="hint">GB/s per GPU. 2–4 suits inference and RAG; training checkpoints want more.</span></div>
         <div class="field" id="f-cap" hidden><label for="w-captb">Usable capacity</label>
           <input type="number" id="w-captb" min="10" step="10" value="1000"><span class="hint">TB net</span></div>
-        <div class="field" id="f-manual" hidden><label for="w-stnodes">WEKApod Nitro nodes</label>
-          <input type="number" id="w-stnodes" min="0" max="512" value="8"></div>
-        <div class="field"><label for="w-scheme">Protection scheme</label><select id="w-scheme"></select></div>
+        <div class="field" id="f-manual" hidden><label for="w-stnodes">WEKApod nodes</label>
+          <input type="number" id="w-stnodes" min="8" max="1024" value="8"></div>
+        <div class="field"><label for="w-scheme">Protection scheme</label><select id="w-scheme"></select>
+          <span class="hint">WEKA sizes the WEKApod at 5+2 with one virtual hot spare.</span></div>
       </div>
       <div class="card" id="storage-summary"></div>
     </div>

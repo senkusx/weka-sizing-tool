@@ -177,9 +177,43 @@ console.log('\nDGX B300 and WEKApod form factors');
   const overflow = L.racks.some((r) => r.devices.some((d) => d.uTop > RACK.totalU || d.uTop - d.ru + 1 < 1));
   console.log(`  ${overflow ? 'FAIL' : 'PASS'}  no device overflows its rack`);
   if (overflow) failures++;
-  // WEKApod Nitro is a 2U four-node chassis, not four 1U boxes.
-  check('WEKApod nodes per chassis', INFRA.wekapod.nodesPerChassis, 4, 0);
-  check('24 WEKApod nodes occupy', liq.storage ? Math.ceil(24 / 4) * 2 : 0, 12, 0, 'U');
+  // WEKApod Nitro is a 1U server: WEKA's deck states 8 nodes in 8 rack units.
+  check('24 Nitro nodes occupy', 24 * WEKAPODS['nitro-155'].ru, 24, 0, 'U');
+}
+
+console.log('\nWEKApod against WEKA published configurations');
+{
+  // WEKA's own deck: 8 x WPS155-SAE = 484 TB usable, 8 x WPS175-SAE = 968 TB,
+  // both at 5D+2P+1VHS, 8RU, ~6.4 kW, ~74 kg.
+  const a = sizeWekapod({ podKey: 'nitro-155', nodes: 8 });
+  const b = sizeWekapod({ podKey: 'nitro-175', nodes: 8 });
+  check('8x WPS155-SAE usable capacity', a.netTB, 484, 1, ' TB');
+  check('8x WPS175-SAE usable capacity', b.netTB, 968, 1, ' TB');
+  check('8x WPS155-SAE rack units', a.ru, 8, 0, 'U');
+  check('8x WPS155-SAE power', a.watts / 1000, 6.4, 0.01, ' kW');
+  check('8x WPS155-SAE weight', a.weightKg, 74, 0.5, ' kg');
+  check('8x WPS155-SAE read throughput', a.readGBs, 568, 1, ' GB/s');
+  check('8x WPS155-SAE write throughput', a.writeGBs, 256, 1, ' GB/s');
+  check('8x WPS155-SAE read IOPS', a.readIops / 1e6, 18, 0.1, 'M');
+  check('8x WPS155-SAE write IOPS', a.writeIops / 1e6, 4.7, 0.1, 'M');
+  // Nitro is a 1U server; Prime 2218 is 2U.
+  check('Nitro rack units per node', WEKAPODS['nitro-155'].ru, 1, 0, 'U');
+  check('Prime 2218 rack units per node', WEKAPODS['prime-2218-120'].ru, 2, 0, 'U');
+  // Storage racks must be drawn at the pod's real height.
+  const f = sizeFacility({ gpuNodes: 8, nodeKey: 'smc-b300', coolingKey: 'air', profileKey: 'regional', storageNodes: 16, storagePodKey: 'prime-2218-120' });
+  const L = buildRALayout(f, { gpuNodes: 8 });
+  const st = L.racks.filter((r) => r.kind === 'storage');
+  const devs = st.reduce((n, r) => n + r.devices.length, 0);
+  check('16 Prime 2218 nodes drawn', devs, 16, 0, ' devices');
+  check('drawn at 2U each', st[0].devices[0].ru, 2, 0, 'U');
+  // Every catalogued pod must size cleanly.
+  let bad = 0;
+  for (const k of Object.keys(WEKAPODS)) {
+    const r = sizeWekapod({ podKey: k, nodes: 8 });
+    if (!Number.isFinite(r.netTB) || r.netTB <= 0 || r.netTB > r.rawTB) { console.log(`  FAIL  ${k}`); bad++; }
+  }
+  console.log(`  ${bad ? 'FAIL' : 'PASS'}  ${Object.keys(WEKAPODS).length} WEKApod models size cleanly`);
+  failures += bad;
 }
 
 console.log('\nInference engine — memory arithmetic');

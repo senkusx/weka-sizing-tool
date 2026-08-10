@@ -162,19 +162,34 @@ window.RARack = (function () {
   }
 
   /* ---------- storage, fabric, platform ---------- */
-  /* WEKApod Nitro: 2U chassis carrying four half-width nodes. */
+  /* WEKApod: a 1U server (Nitro, Prime 2118) or 2U (Prime 2218), in WEKA's
+     purple livery, with its E3.S / U.2 carriers across the face. */
   function wekapodFront(w, h, d, uid) {
-    let s = rect(0, 0, w, h, `url(#fg${uid})`, C.fEdge, 2) + ears(w, h, true);
-    const x0 = G.EAR + 5, x1 = w - G.EAR - 5, iw = x1 - x0;
-    const nodes = d.nodes || 4, nh = (h - 8) / 2, nw = iw / 2 - 3;
-    for (let i = 0; i < nodes; i++) {
-      const col = i % 2, row = Math.floor(i / 2);
-      const nx = x0 + col * (nw + 6), ny = 4 + row * (nh + 1);
-      s += rect(nx, ny, nw, nh - 1, '#4a4a50', C.fEdge, 1);
-      s += circ(nx + 4, ny + nh / 2, 1.4, C.green);
-      s += driveRow(nx + 8, ny + 2, nw - 14, nh - 6, 5, uid);
+    let s = rect(0, 0, w, h, '#4b2a70', '#2a1740', 2);
+    // Rack ears in the same purple rather than the generic grey.
+    s += rect(0, 0, G.EAR, h, '#5a3583', '#2a1740') + rect(w - G.EAR, 0, G.EAR, h, '#5a3583', '#2a1740');
+    const n = Math.max(1, Math.round(h / G.U));
+    for (let i = 0; i < n; i++) {
+      const cy = (i + 0.5) * (h / n);
+      s += circ(G.EAR / 2, cy, 1.5, '#2a1740') + circ(w - G.EAR / 2, cy, 1.5, '#2a1740');
     }
-    s += text(x1 - 2, h - 3, 'WEKApod Nitro', '#a9a9b0', 6.5, 'end', 600);
+    const x0 = G.EAR + 6, x1 = w - G.EAR - 6, iw = x1 - x0;
+    s += circ(x0 + 4, h / 2, 1.5, C.green);
+    // E3.S carriers are narrow and vertical; 14 of them span about half the face.
+    const drives = d.drives || 14;
+    const zone = Math.min(iw * 0.62, drives * 11);
+    const pitch = zone / drives;
+    for (let i = 0; i < drives; i++) {
+      const bx = x0 + 10 + i * pitch;
+      s += rect(bx, 3.5, pitch - 1.4, h - 7, '#6d4a94', '#311c49', 0.6);
+      s += rect(bx + 0.7, 5, Math.max(0.8, (pitch - 1.4) * 0.22), h - 10, '#8a68b0', '', 0.4);
+    }
+    // Perforated intake for the rest of the face, then the WEKA wordmark.
+    const vx = x0 + 12 + zone;
+    if (x1 - vx > 20) {
+      s += rect(vx, 3.5, x1 - vx - 26, h - 7, `url(#pd${uid})`, '#311c49', 0.8);
+      s += text(x1 - 3, h / 2 + 3, 'WEKA', '#e6dcf5', Math.min(9, h * 0.36), 'end', 700);
+    }
     return s;
   }
 

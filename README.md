@@ -176,11 +176,22 @@ throughput while `params` drives memory.
   prefill. These are the least-grounded numbers in the tool: they reflect typical
   vLLM/TensorRT-LLM behaviour, not a benchmark of this architecture. Validate
   throughput before committing to an SLA.
-- **WEKApod form factor** — WEKA ships the Nitro 150 as a **2U four-node chassis**
-  (56 TLC drives, 720/186 GB/s, 18M IOPS per 8-node appliance). The reference
-  architecture elevation draws one rack unit per node, which overstates the storage
-  rack by a factor of two; the tool uses the real chassis. Power and weight per node
-  stay at the RA's 800 W / 31.2 kg since WEKA does not publish them.
+- **WEKApod models** come from WEKA's own NeuralMesh material and are sized natively
+  rather than approximated. The catalogue covers Nitro (14 × 7.68 / 15.36 / 30 TB E3.S
+  TLC, 1U) and Prime 2118 / 2218 (18 × 30–120 TB eTLC or QLC). The engine reproduces
+  WEKA's published configurations exactly:
+
+  | 8 × WPS155-SAE | Model | WEKA |
+  |---|---|---|
+  | Usable capacity | 484 TB | 484 TB |
+  | Read / write | 568 / 256 GB/s | 568 / 256 GB/s |
+  | Read / write IOPS | 18M / 4.7M | 18M / 4.7M |
+  | Rack units | 8U | 8U |
+  | Power / weight | 6.4 kW / 74 kg | ~6.4 kW / ~74 kg |
+
+  8 × WPS175-SAE likewise gives 968 TB. All of it falls out of the same published
+  net-capacity formula at WEKA's 5D+2P+1VHS setting. Note the RA sheet's 31.2 kg per
+  node is roughly 3× WEKA's own figure; the tool uses WEKA's.
 - **DGX B300** is 10U, 14.5 kW, 168 kg with 12x 3.3 kW PSUs, per NVIDIA's datasheet.
   Its system memory figure is the published maximum.
 - **DLC chassis height** — the liquid-cooled B300 is a 4U chassis, which is the only
