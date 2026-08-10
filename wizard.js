@@ -306,15 +306,22 @@ function refresh() {
   $w('w-ttft-val').textContent = $w('w-ttft').value;
   $w('w-gbpergpu-val').textContent = $w('w-gbpergpu').value;
 
+  // Nodes and racks are two views of the same quantity, so only one is editable;
+  // the other is locked and shows what it works out to.
   const basis = $w('w-basis').value;
-  $w('f-nodes').hidden = basis !== 'nodes';
-  $w('f-racks').hidden = basis !== 'racks';
-  $w('w-basis-hint').textContent = basis === 'workload'
-    ? 'Concurrency and the latency target decide how many nodes you need.'
-    : 'The fleet is fixed; the tool reports the concurrency and throughput it carries.';
+  const byNodes = basis === 'nodes';
+  const byRacks = basis === 'racks';
+  $w('w-nodes').disabled = !byNodes;
+  $w('w-racks').disabled = !byRacks;
+  $w('f-nodes').classList.toggle('locked', !byNodes);
+  $w('f-racks').classList.toggle('locked', !byRacks);
   const coolNow = $w('w-cooling').value;
   const perRackNow = RACK.cooling[coolNow].gpuNodesPerRack;
-  $w('w-racks-hint').textContent = `${perRackNow} GPU nodes per ${coolNow === 'liquid' ? 'DLC' : 'air-cooled'} rack, so ${Math.max(1, +$w('w-racks').value || 1)} rack(s) = ${Math.max(1, +$w('w-racks').value || 1) * perRackNow} nodes.`;
+  $w('w-basis-hint').textContent = basis === 'workload'
+    ? 'Concurrency and the latency target decide the fleet; both fields below are derived.'
+    : byNodes ? 'Node count is fixed; rack count follows from the cooling choice.'
+      : 'Rack count is fixed; node count follows from the cooling choice.';
+  $w('w-racks-hint').textContent = `${perRackNow} GPU nodes per ${coolNow === 'liquid' ? 'DLC' : 'air-cooled'} rack.`;
 
   const mode = $w('w-stmode').value;
   $w('f-ratio').hidden = mode !== 'ratio';
@@ -332,6 +339,11 @@ function refresh() {
   $w('w-model-hint').textContent = `${(m.params / 1e9).toFixed(1)}B params${m.moe ? ` (${(m.activeParams / 1e9).toFixed(1)}B active)` : ''} · ${m.layers} layers · ${m.kvHeads} KV heads`;
 
   STATE = computeAll();
+  // Reflect the solved figures back into whichever field is locked.
+  if (STATE && !STATE.error) {
+    if (!byNodes) $w('w-nodes').value = STATE.inf.nodes;
+    if (!byRacks) $w('w-racks').value = STATE.fac.computeRacks;
+  }
   renderLive();
   if (step === STEPS.length - 1) renderResults();
 }

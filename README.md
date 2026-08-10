@@ -140,6 +140,11 @@ thermal and fabric choice rather than a power one.
 - **Fixed compute racks** — same, expressed in racks. Cooling decides the nodes per
   rack (2 air, 8 DLC), so 8 racks is 16 nodes air-cooled and 64 liquid-cooled.
 
+Node count and rack count are two views of one quantity, so only the field matching
+the chosen basis is editable. The other stays visible but locked, showing what it
+works out to — pick 8 racks and the node field reads 16 air-cooled or 64 on DLC.
+Under workload-driven sizing both are locked and show the solved fleet.
+
 Capacity-led sizing flags a shortfall when the fixed fleet cannot carry the stated
 load, and errors outright when it is too small to hold even one model replica.
 

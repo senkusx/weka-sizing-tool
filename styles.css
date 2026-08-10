@@ -183,6 +183,20 @@ input[type="number"], input[type="text"], select {
 }
 input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
 
+/* A locked field still shows its value — it is the figure the other basis
+   derived — but cannot be edited. */
+input:disabled, select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+.field.locked label::after {
+  content: " · derived";
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
 .range-row { display: flex; align-items: center; gap: 10px; }
 .range-row input[type="range"] { flex: 1; accent-color: var(--accent); min-width: 0; }
 .range-val {

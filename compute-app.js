@@ -245,16 +245,22 @@ function render() {
     : 'Direct liquid cooled — not available for this node';
   if (!node.liquidCapable && coolSel.value === 'liquid') coolSel.value = 'air';
 
-  // Sizing basis: solve for the fleet, or fix it and report what it carries.
-  $('f-nodes').hidden = input.basis !== 'nodes';
-  $('f-racks').hidden = input.basis !== 'racks';
+  // Sizing basis. Nodes and racks are two views of the same quantity, so only
+  // one is editable; the other is locked and shows what it works out to.
   const perRack = RACK.cooling[coolSel.value].gpuNodesPerRack;
+  const byNodes = input.basis === 'nodes';
+  const byRacks = input.basis === 'racks';
+  $('fixedNodes').disabled = !byNodes;
+  $('fixedRacks').disabled = !byRacks;
+  $('f-nodes').classList.toggle('locked', !byNodes);
+  $('f-racks').classList.toggle('locked', !byRacks);
   $('basis-hint').textContent = input.basis === 'workload'
-    ? 'Concurrency and the latency target decide the node count.'
-    : 'The fleet is fixed; the tool reports what it carries.';
-  $('racks-hint').textContent = `${perRack} nodes per rack, so ${input.fixedRacksInput} rack(s) = ${input.fixedRacksInput * perRack} nodes.`;
-  input.fixedNodes = input.basis === 'nodes' ? input.fixedNodesInput
-    : input.basis === 'racks' ? input.fixedRacksInput * perRack : null;
+    ? 'Concurrency and the latency target decide the fleet; both fields below are derived.'
+    : byNodes ? 'Node count is fixed; rack count follows from the cooling choice.'
+      : 'Rack count is fixed; node count follows from the cooling choice.';
+  $('racks-hint').textContent = `${perRack} GPU nodes per ${coolSel.value === 'liquid' ? 'DLC' : 'air-cooled'} rack.`;
+  input.fixedNodes = byNodes ? input.fixedNodesInput
+    : byRacks ? input.fixedRacksInput * perRack : null;
 
   const r = sizeInference(input);
   if (r.error) {
@@ -272,6 +278,10 @@ function render() {
   if (r.nodes < profile.minGpuNodes) {
     r.notes.push({ level: 'info', text: `The ${profile.label} profile assumes at least ${profile.minGpuNodes} GPU nodes; this workload needs ${r.nodes}. The smaller footprint is fine, but the profile's fabric and storage assumptions may be heavier than required.` });
   }
+
+  // Reflect the solved figures back into whichever field is locked.
+  if (!byNodes) $('fixedNodes').value = r.nodes;
+  if (!byRacks) $('fixedRacks').value = f.computeRacks;
 
   LAST = { input, r, f };
   // Published for the rack elevation page.
