@@ -43,6 +43,21 @@ must be owned by uid 101 or it will fail to start.
 `GET /healthz` returns `200 ok` for load balancer and orchestrator probes; the
 image also declares a `HEALTHCHECK` against it.
 
+### Published images
+
+Pushes to `main` and `v*` tags build and publish to GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/<owner>/weka-sizing-tool:latest
+```
+
+CI builds **linux/amd64 and linux/arm64**. This matters: building on an Apple
+Silicon workstation produces an arm64-only image that will not run on a typical
+x86_64 server, so let CI publish rather than pushing a local build.
+
+Publishing uses the Actions-provided `GITHUB_TOKEN`, so no personal access token
+or repository secret is required.
+
 To put it behind TLS, terminate at your reverse proxy or ingress and forward to
 port 8080. Nothing in the app calls out to the network and no sizing data ever
 leaves the browser, so it is safe to run on an internal network without egress.
@@ -61,6 +76,22 @@ leaves the browser, so it is safe to run on an internal network without egress.
 | `docker-compose.yml` | One-command deployment |
 
 `sizing.js` has no DOM dependency, so it can be required and tested directly in Node.
+
+## Tests
+
+```bash
+node .github/scripts/verify-engine.js
+```
+
+These check the engine against figures published by third parties rather than
+against our own arithmetic: both Lenovo LP1698 worked examples, the four WEKA
+benchmark measurements, and the two SPECstorage reference configurations
+reproducing their own published results. If one fails, the tool has started
+disagreeing with the documentation it claims to implement.
+
+CI additionally builds the image and asserts that every asset is served, that a
+missing path returns 404, that security headers survive the per-location cache
+block, and that nginx is not running as root.
 
 ## Rack elevations
 

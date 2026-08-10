@@ -1,0 +1,126 @@
+name: build
+
+# Builds the container image, smoke-tests it, and publishes multi-architecture
+# images to GitHub Container Registry.
+#
+# Multi-arch matters here: the image is usually built on an Apple Silicon
+# workstation, which produces arm64 only and will not run on a typical x86_64
+# server. Building linux/amd64 and linux/arm64 in CI means whatever is pulled
+# runs wherever it lands.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  verify:
+    name: Build and smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check JavaScript parses
+        run: for f in catalog.js sizing.js app.js rack.js; do node --check "$f"; done
+
+      - name: Verify the capacity engine against published worked examples
+        run: node .github/scripts/verify-engine.js
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: weka-sizing:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run container and check every asset is served
+        run: |
+          docker run -d --name ci-test -p 8080:8080 \
+            --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+            --tmpfs /var/cache/nginx:uid=101,gid=101 \
+            --tmpfs /var/run:uid=101,gid=101 \
+            --tmpfs /tmp:uid=101,gid=101 \
+            weka-sizing:ci
+
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8080/healthz >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          fail=0
+          for path in /index.html /rack.html /styles.css /rack.css \
+                      /catalog.js /sizing.js /app.js /rack.js /healthz; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8080$path")
+            echo "  $path -> $code"
+            [ "$code" = "200" ] || fail=1
+          done
+
+          # A missing file must 404 rather than silently fall back to index.html.
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/nope)
+          echo "  /nope -> $code (expect 404)"
+          [ "$code" = "404" ] || fail=1
+
+          # Security headers must survive the per-location Cache-Control block.
+          curl -sI http://127.0.0.1:8080/app.js | grep -qi 'x-content-type-options' \
+            || { echo "  missing security headers on /app.js"; fail=1; }
+
+          # The server must not be running as root.
+          [ "$(docker exec ci-test id -un)" = "nginx" ] \
+            || { echo "  container is not running as nginx"; fail=1; }
+
+          docker logs ci-test
+          docker rm -f ci-test >/dev/null
+          exit $fail
+
+  publish:
+    name: Publish to GHCR
+    needs: verify
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          # Provided by Actions — no personal token or repository secret needed.
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
