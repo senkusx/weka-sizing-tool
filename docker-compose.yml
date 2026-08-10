@@ -1,0 +1,24 @@
+services:
+  weka-sizing:
+    build: .
+    image: weka-sizing:latest
+    container_name: weka-sizing
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+    # The container needs no writable application storage — the whole app is
+    # static and every calculation happens in the browser.
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    # nginx needs scratch space for its temp paths and pid file. tmpfs so nothing
+    # persists; uid/gid 101 is the `nginx` user, which must own these or nginx
+    # cannot create its cache directories at startup.
+    tmpfs:
+      - /var/cache/nginx:uid=101,gid=101
+      - /var/run:uid=101,gid=101
+      - /tmp:uid=101,gid=101

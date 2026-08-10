@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WEKA Storage Sizing Tool</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <h1>WEKA Storage Sizing</h1>
+    <span>Cluster design calculator for Lenovo, HPE and vendor-neutral builds</span>
+  </div>
+  <div class="topbar-actions">
+    <button id="btn-theme" title="Toggle light / dark">Theme</button>
+    <button id="btn-csv">Export CSV</button>
+    <button id="btn-print" class="primary">Print / PDF</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <details class="group" open>
+      <summary>Requirements</summary>
+      <div class="group-body">
+        <div class="field">
+          <label for="workload">Workload profile</label>
+          <select id="workload"></select>
+          <div class="hint" id="workload-note"></div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="targetTB">Usable capacity</label>
+            <input type="number" id="targetTB" min="0" step="10" value="1000">
+            <div class="hint">TB net</div>
+          </div>
+          <div class="field">
+            <label for="targetGBps">Read throughput</label>
+            <input type="number" id="targetGBps" min="0" step="10" value="0">
+            <div class="hint">GB/s — 0 to ignore</div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="manualNodes">Node count override</label>
+          <input type="number" id="manualNodes" min="0" step="1" placeholder="Auto — solved from targets">
+          <div class="hint">Leave blank to let the tool solve for the smallest compliant cluster.</div>
+        </div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Vendor &amp; hardware</summary>
+      <div class="group-body">
+        <div class="field">
+          <label for="vendor">Vendor</label>
+          <select id="vendor"></select>
+        </div>
+        <div class="field">
+          <label for="server">Backend server model</label>
+          <select id="server"></select>
+          <div class="hint" id="server-note"></div>
+        </div>
+        <div class="field">
+          <label for="cpu">CPU</label>
+          <select id="cpu"></select>
+        </div>
+        <div class="field">
+          <label for="ram">Memory per node</label>
+          <select id="ram"></select>
+        </div>
+        <div class="field">
+          <label for="drive">NVMe drive model</label>
+          <select id="drive"></select>
+        </div>
+        <div class="field">
+          <label for="drives">Data drives per node</label>
+          <div class="range-row">
+            <input type="range" id="drives" min="4" max="10" step="1" value="10">
+            <span class="range-val" id="drives-val">10</span>
+          </div>
+          <div class="hint" id="drives-hint"></div>
+        </div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Protection &amp; resiliency</summary>
+      <div class="group-body">
+        <div class="field">
+          <label for="scheme">Data protection scheme</label>
+          <select id="scheme"></select>
+          <div class="hint" id="scheme-note"></div>
+        </div>
+        <div class="field">
+          <label for="spares">Hot spare capacity</label>
+          <div class="range-row">
+            <input type="range" id="spares" min="0" max="6" step="1" value="1">
+            <span class="range-val" id="spares-val">1</span>
+          </div>
+          <div class="hint">Failure domains reserved for rebuild. One is the common default.</div>
+        </div>
+      </div>
+    </details>
+
+    <details class="group">
+      <summary>Networking</summary>
+      <div class="group-body">
+        <div class="field">
+          <label for="nic">Data network adapter</label>
+          <select id="nic"></select>
+        </div>
+        <div class="field">
+          <label for="nicCount">Adapters per node</label>
+          <div class="range-row">
+            <input type="range" id="nicCount" min="1" max="3" step="1" value="2">
+            <span class="range-val" id="nicCount-val">2</span>
+          </div>
+          <div class="hint">Two is recommended for redundancy. WEKA uses at most two RDMA adapters for cluster traffic.</div>
+        </div>
+        <div class="field">
+          <label for="switch">Fabric switch</label>
+          <select id="switch"></select>
+        </div>
+        <label class="check"><input type="checkbox" id="rdma" checked><span>RDMA enabled (adds 1.86 GiB per server)</span></label>
+        <label class="check"><input type="checkbox" id="protocols" checked><span>NFS / SMB / S3 protocol containers (adds 14.9 GiB per server)</span></label>
+      </div>
+    </details>
+  </aside>
+
+  <main class="results" id="results"></main>
+</div>
+
+<script src="catalog.js"></script>
+<script src="sizing.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
