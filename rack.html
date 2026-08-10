@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WEKA Rack Elevation</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="rack.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <h1>WEKA Rack Elevation</h1>
+    <span>Front and rear views with storage fabric cabling</span>
+  </div>
+  <div class="topbar-actions">
+    <a class="btn" href="index.html">← Sizing</a>
+    <button id="btn-theme" title="Toggle light / dark">Theme</button>
+    <button id="btn-svg">Export SVG</button>
+    <button id="btn-print" class="primary">Print / PDF</button>
+  </div>
+</header>
+
+<div class="rack-controls">
+  <div class="ctl">
+    <label for="view">View</label>
+    <select id="view">
+      <option value="both">Front &amp; rear</option>
+      <option value="front">Front only</option>
+      <option value="rear">Rear only</option>
+    </select>
+  </div>
+  <div class="ctl">
+    <label for="rackU">Rack height</label>
+    <select id="rackU">
+      <option value="42">42U</option>
+      <option value="45">45U</option>
+      <option value="48">48U</option>
+    </select>
+  </div>
+  <div class="ctl">
+    <label for="torCount">ToR switches per rack</label>
+    <select id="torCount">
+      <option value="2">2 (redundant pair)</option>
+      <option value="1">1</option>
+    </select>
+  </div>
+  <div class="ctl check-ctl">
+    <label class="check"><input type="checkbox" id="showCables" checked><span>Fabric cabling</span></label>
+    <label class="check"><input type="checkbox" id="showLabels" checked><span>Device labels</span></label>
+  </div>
+  <div class="ctl-summary" id="ctl-summary"></div>
+</div>
+
+<main class="rack-main" id="rack-main"></main>
+
+<script src="catalog.js"></script>
+<script src="sizing.js"></script>
+<script src="rack.js"></script>
+</body>
+</html>

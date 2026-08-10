@@ -233,6 +233,8 @@ function render() {
   const input = readInput();
   const r = size(input);
   LAST = { input, r };
+  // Published for the rack elevation page, which sizes from the same config.
+  try { localStorage.setItem('weka-sizing-config', JSON.stringify(input)); } catch (e) { /* private mode */ }
 
   const cap = fmtCap(r.capacity.netTB);
   const worst = r.warnings.some((w) => w.level === 'critical');

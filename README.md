@@ -56,10 +56,38 @@ leaves the browser, so it is safe to run on an internal network without egress.
 | `catalog.js` | WEKA platform constants + Lenovo/HPE/generic hardware catalog |
 | `sizing.js` | Sizing engine — pure functions, no DOM |
 | `app.js` | Form wiring, rendering, charts, CSV export |
+| `rack.html` / `rack.css` / `rack.js` | Rack elevation page — front/rear views and fabric cabling |
 | `Dockerfile` / `nginx.conf` / `security-headers.conf` | Container image and web server config |
 | `docker-compose.yml` | One-command deployment |
 
 `sizing.js` has no DOM dependency, so it can be required and tested directly in Node.
+
+## Rack elevations
+
+`rack.html` turns the sized cluster into to-scale front and rear rack elevations,
+drawn in the flat technical style of VisioCafe / VSD Grafx stencils: dark
+charcoal faceplates with drive carriers, bezel LEDs and perforated vent zones on
+the front; light grey chassis with PSUs, exhaust perforation and PCIe port cages
+on the rear. The rear view overlays the storage fabric cabling, splitting each
+node's ports across a redundant top-of-rack switch pair.
+
+It reads the same configuration the sizing page writes to `localStorage`, so the
+two stay in sync — edit the sizing inputs and the rack redraws. Opened on its
+own it falls back to the default configuration.
+
+Proportions are deliberate rather than decorative. A 2.5" carrier is about 15 mm
+across on a 450 mm usable face, so ten of them cover roughly a third of the
+width and the remaining bezel is drawn as vent. Switch orientation follows
+Lenovo LP1698, which specifies port-side-exhaust switches mounted ports-to-rear —
+so the switches show their PSU/fan side on the front elevation and their port
+side on the rear, which is where the cabling lands.
+
+Device colours are fixed rather than themed: a rack elevation is a drawing of
+physical hardware, so it looks identical in light mode, dark mode and on paper.
+
+This is a planning sketch, not a wiring schedule — port-level assignment, cable
+lengths, breakout cabling, PDU placement and out-of-band management are all left
+to detailed design.
 
 ## What is derived vs modelled
 

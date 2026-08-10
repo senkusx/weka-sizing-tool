@@ -10,7 +10,7 @@ COPY security-headers.conf /etc/nginx/security-headers.conf
 
 # Application files.
 WORKDIR /usr/share/nginx/html
-COPY index.html styles.css catalog.js sizing.js app.js ./
+COPY index.html rack.html styles.css rack.css catalog.js sizing.js app.js rack.js ./
 
 # nginx:alpine ships an unprivileged `nginx` user. Running as non-root means the
 # container cannot bind ports below 1024, hence port 8080 rather than 80.

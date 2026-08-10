@@ -106,6 +106,8 @@ button, .btn {
 button:hover { background: var(--surface-2); }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 550; }
 button.primary:hover { filter: brightness(1.07); }
+a.btn { display: inline-flex; align-items: center; text-decoration: none; line-height: 1.2; }
+a.btn:hover { background: var(--surface-2); }
 
 /* ---------- layout ---------- */
 .layout {
