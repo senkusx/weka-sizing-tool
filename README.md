@@ -118,11 +118,18 @@ block, and that nginx is not running as root.
 | Air-cooled compute rack (2 nodes + Tier 2) | 28,986 W |
 | Liquid-cooled compute rack (8 nodes + CDU + Tier 2) | 115,380 W |
 | Air-cooled RTX PRO 6000 rack (2 nodes + Tier 2) | 14,246 W |
-| 2 MW design, air-cooled | 64 compute racks, 68 total |
+| Air-cooled rack without Tier 2 | 27,798 W |
+| Liquid-cooled rack without Tier 2 | 114,192 W |
+| Tier 2 block storage units | 3 (3,564 W total) |
+| 2 MW design, air-cooled | 64 compute + 2 fabric + 1 storage + 1 mgmt = 68 racks |
 | 2 MW design, liquid-cooled | 16 compute racks |
 
-The rack rule comes straight from the elevations: two GPU nodes per air-cooled
-rack, eight plus a 250 kW CDU per liquid-cooled rack. At 27.8 kW an air-cooled
+The rack rules come straight from the elevations: two GPU nodes per air-cooled
+rack, eight plus a 250 kW CDU per liquid-cooled rack, and **exactly three Tier 2
+block storage units** across the whole design — at the base of the first three
+compute racks, not one per rack. That last rule is what makes the MEP sheet quote
+two different compute-rack totals (28,986 W for the racks that carry one, 27,798 W
+for the rest), and getting it wrong overstates the 2 MW design by 72 kW. At 27.8 kW an air-cooled
 B300 rack sits well inside a 415 V/60 A 3-phase feed, so the two-node limit is a
 thermal and fabric choice rather than a power one.
 

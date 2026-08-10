@@ -119,12 +119,44 @@ console.log('\nInferX reference architecture — facility roll-up');
   check('air-cooled total racks', air.totalRacks, 68, 0);
   check('liquid-cooled compute racks', liq.computeRacks, 16, 0);
   // Elevation rack totals: air 2x13899+1188, liquid 8x13899+3000+1188.
-  const airRack = sizeFacility({ gpuNodes: 128, nodeKey: 'smc-b300', coolingKey: 'air', profileKey: 'edge', storageNodes: 0 });
-  const liqRack = sizeFacility({ gpuNodes: 128, nodeKey: 'smc-b300', coolingKey: 'liquid', profileKey: 'edge', storageNodes: 0 });
-  check('air compute rack (2 nodes + tier2)', airRack.power.perComputeRackW, 28986, 0, ' W');
-  check('liquid compute rack (8 nodes + CDU + tier2)', liqRack.power.perComputeRackW, 115380, 0, ' W');
+  check('air compute rack with Tier 2', air.power.rackWithTier2W, 28986, 0, ' W');
+  check('air compute rack without Tier 2', air.power.rackPlainW, 27798, 0, ' W');
+  check('liquid compute rack with Tier 2', liq.power.rackWithTier2W, 115380, 0, ' W');
+  check('liquid compute rack without Tier 2', liq.power.rackPlainW, 114192, 0, ' W');
+  // Both reference designs carry exactly three Tier 2 units, not one per rack.
+  check('Tier 2 units on the 2 MW design', air.tier2Count, 3, 0, ' units');
+  check('Tier 2 total power', air.power.tier2W, 3564, 0, ' W');
+  // The 2 MW elevation uses two switch-fabric racks for 32 SN5610 + 12 SN2201 + 2 SN4600C.
+  check('switch fabric racks on the 2 MW design', air.fabricRacks, 2, 0, ' racks');
   const rtx = sizeFacility({ gpuNodes: 8, nodeKey: 'smc-rtx6000', coolingKey: 'air', profileKey: 'edge', storageNodes: 0 });
-  check('air RTX 6000 Pro rack (2 nodes + tier2)', rtx.power.perComputeRackW, 14246, 0, ' W');
+  check('air RTX 6000 Pro rack with Tier 2', rtx.power.rackWithTier2W, 14246, 0, ' W');
+  check('air RTX 6000 Pro rack without', rtx.power.rackPlainW, 13058, 0, ' W');
+
+  // Every rack kind must actually be drawn, and the fabric rack must carry OOB.
+  const L = buildRALayout(air, { gpuNodes: 128 });
+  const kinds = new Set(L.racks.map((r) => r.kind));
+  ['mgmt', 'gpu', 'fabric', 'storage'].forEach((k) => {
+    const ok = kinds.has(k);
+    console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${k} rack is drawn`);
+    if (!ok) failures++;
+  });
+  const fabRack = L.racks.find((r) => r.kind === 'fabric');
+  const roles = new Set(fabRack.devices.filter((d) => d.type === 'switch').map((d) => d.role));
+  ['oob', 'ns', 'ew'].forEach((r) => {
+    const ok = roles.has(r);
+    console.log(`  ${ok ? 'PASS' : 'FAIL'}  fabric rack carries ${r} switches`);
+    if (!ok) failures++;
+  });
+  const t2Racks = L.racks.filter((r) => r.kind === 'gpu' && r.devices.some((d) => d.name === 'Tier 2 block storage')).length;
+  check('GPU racks drawn with Tier 2', t2Racks, 3, 0, ' racks');
+
+  // An edge site has no fabric rack, so its leaves belong in the management rack.
+  const edge = sizeFacility({ gpuNodes: 1, nodeKey: 'smc-b300', coolingKey: 'air', profileKey: 'edge', storageNodes: 0 });
+  const eL = buildRALayout(edge, { gpuNodes: 1 });
+  const mgmtRoles = new Set(eL.racks[0].devices.filter((d) => d.type === 'switch').map((d) => d.role));
+  const edgeOk = ['oob', 'ns', 'ew'].every((r) => mgmtRoles.has(r));
+  console.log(`  ${edgeOk ? 'PASS' : 'FAIL'}  edge leaves fall back into the management rack`);
+  if (!edgeOk) failures++;
 }
 
 console.log('\nDGX B300 and WEKApod form factors');
@@ -140,7 +172,8 @@ console.log('\nDGX B300 and WEKApod form factors');
   check('DLC B300 chassis height', L.nodeRu, 4, 0, 'U');
   const gpuRack = L.racks.find((r) => r.kind === 'gpu');
   const usedU = gpuRack.devices.reduce((a, d) => a + d.ru, 0);
-  check('8 DLC nodes + CDU fit one rack', usedU, 36, 0, 'U');
+  // 8 x 4U nodes + 4U CDU + 4U Tier 2 in the racks that carry one.
+  check('8 DLC nodes + CDU + Tier 2 fit one rack', usedU, 40, 0, 'U');
   const overflow = L.racks.some((r) => r.devices.some((d) => d.uTop > RACK.totalU || d.uTop - d.ru + 1 < 1));
   console.log(`  ${overflow ? 'FAIL' : 'PASS'}  no device overflows its rack`);
   if (overflow) failures++;

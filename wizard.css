@@ -74,8 +74,8 @@
 
 .ra-rack-row {
   display: flex;
-  gap: 30px;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 30px 34px;
   padding-bottom: 8px;
   align-items: flex-start;
 }

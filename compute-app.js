@@ -120,7 +120,7 @@ function facilityCard(f, input) {
   const rows = [
     ['GPU compute nodes', `${nf(p.gpuNodeW / 1000, 1)} kW`],
     f.cooling.cdu ? ['CDUs', `${nf(p.cduW / 1000, 1)} kW`] : null,
-    p.tier2W ? ['Tier 2 block storage', `${nf(p.tier2W / 1000, 1)} kW`] : null,
+    p.tier2W ? [`Tier 2 block storage (${f.tier2Count} unit${f.tier2Count > 1 ? 's' : ''})`, `${nf(p.tier2W / 1000, 1)} kW`] : null,
     ['Fabric switching', `${nf(p.switchW / 1000, 1)} kW`],
     p.storageW ? ['WEKApod storage', `${nf(p.storageW / 1000, 1)} kW`] : null,
     ['Management rack', `${nf(p.mgmtW / 1000, 1)} kW`],
@@ -130,7 +130,8 @@ function facilityCard(f, input) {
     <h2>Facility</h2>
     <div class="tiles" style="margin-bottom:16px">
       <div class="tile"><div class="v">${nf(f.totalRacks)}</div><div class="k">Racks, ${RACK.totalU}U ${RACK.widthMM}×${RACK.depthMM} mm</div></div>
-      <div class="tile"><div class="v">${nf(p.perComputeRackW / 1000, 1)}<small>kW</small></div><div class="k">Per compute rack</div></div>
+      <div class="tile"><div class="v">${nf(p.rackWithTier2W / 1000, 1)}<small>kW</small></div><div class="k">Compute rack with Tier 2 (first ${f.tier2Count})</div></div>
+      <div class="tile"><div class="v">${nf(p.rackPlainW / 1000, 1)}<small>kW</small></div><div class="k">Compute rack without</div></div>
       <div class="tile"><div class="v">${nf(f.weight.totalKg / 1000, 1)}<small>t</small></div><div class="k">Total IT weight</div></div>
       <div class="tile"><div class="v">${big(f.coolingLoadBTU)}<small>BTU/hr</small></div><div class="k">Heat rejection</div></div>
       <div class="tile"><div class="v">${nf(f.rackUsedPct, 0)}<small>%</small></div><div class="k">Compute rack U used (${f.rackU} of ${RACK.totalU})</div></div>
@@ -143,8 +144,8 @@ function facilityCard(f, input) {
       </tbody>
     </table></div>
     <div class="card-note">
-      Rack composition follows the reference architecture exactly: ${f.cooling.gpuNodesPerRack} GPU nodes per ${esc(f.cooling.label.toLowerCase())} rack${f.cooling.cdu ? ' alongside a 250 kW CDU' : ''}.
-      ${f.cooling.cdu ? '' : `At ${nf(p.perComputeRackW / 1000, 1)} kW the air-cooled rack sits well inside what a ${esc(RACK.feed)} feed could carry, so the two-node limit is a thermal and fabric choice rather than a power one.`}
+      Rack composition follows the reference architecture exactly: ${f.cooling.gpuNodesPerRack} GPU nodes per ${esc(f.cooling.label.toLowerCase())} rack${f.cooling.cdu ? ' alongside a 250 kW CDU' : ''}, with Tier 2 block storage at the base of the first ${f.tier2Count} compute rack${f.tier2Count > 1 ? 's' : ''} only — the reference designs carry exactly ${RACK.tier2Units} Tier 2 units regardless of how many racks they run to, which is why the elevations quote two different compute-rack totals.
+      ${f.cooling.cdu ? '' : `At ${nf(p.rackPlainW / 1000, 1)} kW the air-cooled rack sits well inside what a ${esc(RACK.feed)} feed could carry, so the two-node limit is a thermal and fabric choice rather than a power one.`}
       Heat rejection is the IT load converted at 3.412 BTU/hr per watt and excludes facility overhead — apply your target PUE on top.
     </div>
   </section>`;

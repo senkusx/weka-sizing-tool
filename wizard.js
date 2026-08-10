@@ -229,7 +229,7 @@ function renderResults() {
       <tbody>
         <tr><td><strong>Compute</strong></td><td>${nfW(inf.nodes)} × ${escW(inf.node.label)} (${escW(inf.node.sublabel)}), ${nfW(inf.gpusDeployed)} GPUs, TP ${inf.tp}, ${nfW(inf.deployedReplicas)} replicas</td><td class="num">${nfW(p.gpuNodeW / 1000, 1)} kW</td><td class="num">${fac.computeRacks}</td></tr>
         <tr><td><strong>Networking</strong></td><td>${fac.fabric.ewLeaves + fac.fabric.ewSpines} SN5610 east-west (${fac.fabric.ewOversub}:1), ${fac.fabric.nsLeaves + fac.fabric.nsSpines} north-south (${fac.fabric.nsOversub}:1), ${fac.fabric.oobLeaves + fac.fabric.oobSpines} OOB</td><td class="num">${nfW(p.switchW / 1000, 1)} kW</td><td class="num">${fac.fabricRacks}</td></tr>
-        <tr><td><strong>Storage</strong></td><td>${nfW(s.stNodes)} WEKApod Nitro nodes in ${nfW(fac.storage.chassis)} × 2U chassis · ${nfW(weka.capacity.netTB, 0)} TB usable · ${escW(weka.scheme.id)}</td><td class="num">${nfW(p.storageW / 1000, 1)} kW</td><td class="num">${fac.storageRacks}</td></tr>
+        <tr><td><strong>Storage</strong></td><td>${nfW(s.stNodes)} WEKApod Nitro nodes in ${nfW(fac.storage.chassis)} × 2U chassis · ${nfW(weka.capacity.netTB, 0)} TB usable · ${escW(weka.scheme.id)} · plus ${fac.tier2Count} × Tier 2 block storage</td><td class="num">${nfW(p.storageW / 1000, 1)} kW</td><td class="num">${fac.storageRacks}</td></tr>
         <tr><td><strong>Platform</strong></td><td>Management rack — routers, platform servers, Tier 3, OOB firewalls, break-glass</td><td class="num">${nfW(p.mgmtW / 1000, 1)} kW</td><td class="num">1</td></tr>
         ${fac.cooling.cdu ? `<tr><td><strong>Cooling</strong></td><td>${fac.computeRacks} × ${escW(INFRA.cdu.label)}</td><td class="num">${nfW(p.cduW / 1000, 1)} kW</td><td class="num">—</td></tr>` : ''}
         <tr><td colspan="2"><strong>Total</strong></td><td class="num"><strong>${nfW(p.totalW / 1000, 1)} kW</strong></td><td class="num"><strong>${fac.totalRacks}</strong></td></tr>
@@ -248,7 +248,8 @@ function renderResults() {
       <div class="tile"><div class="v">${nfW(weka.cluster.read / Math.max(1, inf.gpusDeployed), 1)}<small>GB/s</small></div><div class="k">Storage read per GPU</div></div>
       <div class="tile"><div class="v">${nfW(fac.weight.totalKg / 1000, 1)}<small>t</small></div><div class="k">Total IT weight</div></div>
       <div class="tile"><div class="v">${bigW(fac.coolingLoadBTU)}<small>BTU/hr</small></div><div class="k">Heat rejection</div></div>
-      <div class="tile"><div class="v">${nfW(p.perComputeRackW / 1000, 1)}<small>kW</small></div><div class="k">Per compute rack</div></div>
+      <div class="tile"><div class="v">${nfW(p.rackWithTier2W / 1000, 1)}<small>kW</small></div><div class="k">Rack w/ Tier 2 (first ${fac.tier2Count})</div></div>
+      <div class="tile"><div class="v">${nfW(p.rackPlainW / 1000, 1)}<small>kW</small></div><div class="k">Rack without Tier 2</div></div>
       <div class="tile"><div class="v">${escW(RACK.feed)}</div><div class="k">Per-rack feed</div></div>
     </div>
   </section>

@@ -252,12 +252,15 @@ function sizeFacility({ gpuNodes, nodeKey, coolingKey, profileKey, storageNodes 
   const oobLeaves = Math.max(2, Math.ceil(oobPorts / FABRIC_RULES.oobLeafPorts));
   const oobSpines = oobLeaves > 2 ? 2 : 0;
 
+  // The elevations stack switches contiguously — a 2U switch listed at U40 is
+  // followed by the next at U38 — so there is no service gap to allow for.
   const switchU = (ewLeaves + ewSpines + nsLeaves + nsSpines) * FABRIC.sn5610.ru
     + oobLeaves * FABRIC.sn2201.ru + oobSpines * FABRIC.sn4600c.ru;
-  // A dedicated fabric rack is only justified once the switching cannot sit in
-  // the management and compute racks. Below that the leaves are top-of-rack.
-  const fabricRacks = (profile.dedicatedFabricRack && switchU > 16)
-    ? Math.max(1, Math.ceil(switchU / (RACK.totalU - 8))) : 0;
+  // The regional reference design has a dedicated fabric rack for only eight
+  // nodes, so this follows the profile rather than a switch-count threshold.
+  // Edge sites have no fabric rack; their leaves live in the management rack.
+  const fabricRacks = profile.dedicatedFabricRack
+    ? Math.max(1, Math.ceil(switchU / (RACK.totalU - 2))) : 0;
 
   // Storage racks are sized on chassis, not nodes: four nodes share a 2U box.
   const wekaChassis = Math.ceil((storageNodes || 0) / INFRA.wekapod.nodesPerChassis);
@@ -271,7 +274,8 @@ function sizeFacility({ gpuNodes, nodeKey, coolingKey, profileKey, storageNodes 
   // Power.
   const gpuNodeW = gpuNodes * node.watts;
   const cduW = cooling.cdu ? computeRacks * INFRA.cdu.watts : 0;
-  const tier2W = profile.storage === 'tier2' ? computeRacks * INFRA.tier2.watts : 0;
+  const tier2Count = Math.min(RACK.tier2Units, computeRacks);
+  const tier2W = tier2Count * INFRA.tier2.watts;
   const switchW = (ewLeaves + ewSpines + nsLeaves + nsSpines) * FABRIC.sn5610.watts
     + oobLeaves * FABRIC.sn2201.watts + oobSpines * FABRIC.sn4600c.watts;
   const storageW = (storageNodes || 0) * INFRA.wekapod.watts;
@@ -285,14 +289,15 @@ function sizeFacility({ gpuNodes, nodeKey, coolingKey, profileKey, storageNodes 
     + oobLeaves * FABRIC.sn2201.weightKg + oobSpines * FABRIC.sn4600c.weightKg;
   const totalKg = gpuNodeKg + storageKg + switchKg + RACK.mgmtRack.weightKg
     + (cooling.cdu ? computeRacks * INFRA.cdu.weightKg : 0)
-    + (profile.storage === 'tier2' ? computeRacks * INFRA.tier2.weightKg : 0);
+    + tier2Count * INFRA.tier2.weightKg;
 
-  const perComputeRackW = perRack * node.watts
-    + (cooling.cdu ? INFRA.cdu.watts : 0)
-    + (profile.storage === 'tier2' ? INFRA.tier2.watts : 0);
+  // Two rack figures, because only the first few racks carry Tier 2.
+  const nodeRu = cooling.cdu && node.ruLiquid ? node.ruLiquid : node.ru;
+  const rackPlainW = perRack * node.watts + (cooling.cdu ? INFRA.cdu.watts : 0);
+  const rackWithTier2W = rackPlainW + INFRA.tier2.watts;
+  const perComputeRackW = tier2Count > 0 ? rackWithTier2W : rackPlainW;
 
-  const rackU = perRack * node.ru + (cooling.cdu ? INFRA.cdu.ru : 0)
-    + (profile.storage === 'tier2' ? INFRA.tier2.ru : 0);
+  const rackU = perRack * nodeRu + (cooling.cdu ? INFRA.cdu.ru : 0) + INFRA.tier2.ru;
 
   return {
     node, cooling, profile,
@@ -300,7 +305,9 @@ function sizeFacility({ gpuNodes, nodeKey, coolingKey, profileKey, storageNodes 
     storage: { nodes: storageNodes || 0, chassis: wekaChassis, u: wekaU },
     fabric: { ewLeaves, ewSpines, nsLeaves, nsSpines, oobLeaves, oobSpines, switchU, ewPorts, nsPorts, oobPorts,
       ewOversub: FABRIC_RULES.eastWestOversub, nsOversub: FABRIC_RULES.northSouthOversub },
-    power: { gpuNodeW, cduW, tier2W, switchW, storageW, mgmtW, totalW, perComputeRackW },
+    power: { gpuNodeW, cduW, tier2W, switchW, storageW, mgmtW, totalW,
+      perComputeRackW, rackPlainW, rackWithTier2W },
+    tier2Count, nodeRu,
     weight: { totalKg },
     rackU, rackUsedPct: (rackU / RACK.totalU) * 100,
     coolingLoadBTU: totalW * 3.412,
@@ -313,6 +320,7 @@ function sizeFacility({ gpuNodes, nodeKey, coolingKey, profileKey, storageNodes 
    ordered OOB / north-south / east-west from the top down, and WEKApod chassis
    stacked in the storage rack. */
 function buildRALayout(f, opts) {
+  let fabricRacksDrawn = 0;
   const node = f.node;
   const liquid = f.cooling.cdu;
   const nodeRu = liquid && node.ruLiquid ? node.ruLiquid : node.ru;
@@ -341,6 +349,17 @@ function buildRALayout(f, opts) {
   m.push(dev(23, 1, 'switch', 'OOB leaf B', FABRIC.sn2201.label, { ports: 48, role: 'oob' }));
   m.push(dev(2, 1, 'infra', 'CPU compute node 1', INFRA['cpu-node'].model, { drives: 4 }));
   m.push(dev(1, 1, 'infra', 'CPU compute node 2', INFRA['cpu-node'].model, { drives: 4 }));
+  // With no dedicated fabric rack the data-plane leaves sit in the management
+  // rack, exactly as the edge reference design draws them.
+  if (f.fabricRacks === 0) {
+    let u = 20;
+    for (let i = 0; i < f.fabric.nsLeaves; i++, u -= 3) {
+      m.push(dev(u, 2, 'switch', `North-south leaf ${i + 1}`, FABRIC.sn5610.label, { ports: FABRIC.sn5610.ports, role: 'ns' }));
+    }
+    for (let i = 0; i < f.fabric.ewLeaves; i++, u -= 3) {
+      m.push(dev(u, 2, 'switch', `East-west leaf ${i + 1}`, FABRIC.sn5610.label, { ports: FABRIC.sn5610.ports, role: 'ew' }));
+    }
+  }
   racks.push({ name: 'Management rack', kind: 'mgmt', devices: m });
 
   // --- GPU compute racks ---
@@ -352,7 +371,8 @@ function buildRALayout(f, opts) {
     // Reserve the bottom of the rack for storage and, on DLC, the CDU.
     let bottom = 1;
     if (liquid) { d.push(dev(4, INFRA.cdu.ru, 'infra', 'CDU 250 kW', INFRA.cdu.label)); bottom = 5; }
-    if (f.profile.storage === 'tier2') {
+    // Only the first few compute racks carry Tier 2 block storage.
+    if (r < f.tier2Count) {
       d.push(dev(bottom + INFRA.tier2.ru - 1, INFRA.tier2.ru, 'infra', 'Tier 2 block storage', INFRA.tier2.model, { drives: 12 }));
       bottom += INFRA.tier2.ru;
     }
@@ -379,17 +399,22 @@ function buildRALayout(f, opts) {
     for (let i = 0; i < f.fabric.ewSpines; i++) all.push({ ru: 2, label: `East-west spine ${i + 1}`, m: FABRIC.sn5610, role: 'ew' });
     for (let i = 0; i < f.fabric.ewLeaves; i++) all.push({ ru: 2, label: `East-west leaf ${i + 1}`, m: FABRIC.sn5610, role: 'ew' });
 
-    let idx = 0;
-    for (let r = 0; r < f.fabricRacks; r++) {
+    // Keep opening racks until every switch is placed. Sizing and drawing must
+    // agree, so the loop is driven by the switch list rather than a rack count.
+    let idx = 0, r = 0;
+    while (idx < all.length) {
       const d = []; let u = totalU;
-      // A blank unit between switches, as the elevations draw them.
-      while (idx < all.length && u - all[idx].ru + 1 >= 1) {
-        const sw = all[idx++];
+      while (idx < all.length) {
+        const sw = all[idx];
+        if (u - sw.ru + 1 < 1) break;
         d.push(dev(u, sw.ru, 'switch', sw.label, sw.m.label, { ports: sw.m.ports, role: sw.role }));
-        u -= sw.ru + 1;
+        u -= sw.ru;
+        idx++;
       }
-      racks.push({ name: f.fabricRacks > 1 ? `Switch fabric rack ${r + 1}` : 'Switch fabric rack', kind: 'fabric', devices: d });
+      r++;
+      racks.push({ name: `Switch fabric rack ${r}`, kind: 'fabric', devices: d });
     }
+    fabricRacksDrawn = r;
   }
 
   // --- storage rack(s) ---
@@ -407,7 +432,7 @@ function buildRALayout(f, opts) {
     }
   }
 
-  return { racks, nodeRu };
+  return { racks, nodeRu, fabricRacksDrawn };
 }
 
 if (typeof module !== 'undefined' && module.exports) {

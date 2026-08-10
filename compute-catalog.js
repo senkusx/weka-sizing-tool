@@ -163,6 +163,12 @@ const FABRIC_RULES = {
    than the PDU. */
 const RACK = {
   totalU: 48,
+  // Tier 2 block storage is a fixed three units across the whole design, sitting
+  // at the base of the first three compute racks. Both the edge and the 2 MW
+  // reference designs list exactly three regardless of rack count, which is why
+  // their MEP sheet quotes two compute-rack totals: 28,986 W for the racks that
+  // carry one and 27,798 W for the rest.
+  tier2Units: 3,
   widthMM: 800,
   depthMM: 1470,
   feed: '415V/60A 3Ph',
