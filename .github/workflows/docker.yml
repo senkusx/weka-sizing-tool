@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check JavaScript parses
-        run: for f in catalog.js sizing.js app.js rack.js; do node --check "$f"; done
+        run: for f in catalog.js sizing.js app.js rack.js compute-catalog.js inference.js compute-app.js ra-rack.js wizard.js; do node --check "$f"; done
 
       - name: Verify the capacity engine against published worked examples
         run: node .github/scripts/verify-engine.js
@@ -61,8 +61,11 @@ jobs:
           done
 
           fail=0
-          for path in /index.html /rack.html /styles.css /rack.css \
-                      /catalog.js /sizing.js /app.js /rack.js /healthz; do
+          for path in /index.html /rack.html /compute.html /wizard.html \
+                      /styles.css /rack.css /wizard.css \
+                      /catalog.js /sizing.js /app.js /rack.js \
+                      /compute-catalog.js /inference.js /compute-app.js \
+                      /ra-rack.js /wizard.js /healthz; do
             code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8080$path")
             echo "  $path -> $code"
             [ "$code" = "200" ] || fail=1
