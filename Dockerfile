@@ -1,4 +1,4 @@
-# WEKA Storage Sizing Tool — static site served by nginx.
+# InferX solution sizing tool — static site served by nginx.
 # The app is plain HTML/CSS/JS with no build step, so there is nothing to compile.
 
 FROM nginx:1.27-alpine
@@ -10,7 +10,9 @@ COPY security-headers.conf /etc/nginx/security-headers.conf
 
 # Application files.
 WORKDIR /usr/share/nginx/html
-COPY index.html rack.html styles.css rack.css catalog.js sizing.js app.js rack.js ./
+COPY index.html rack.html compute.html styles.css rack.css \
+     catalog.js sizing.js app.js rack.js \
+     compute-catalog.js inference.js compute-app.js ./
 
 # nginx:alpine ships an unprivileged `nginx` user. Running as non-root means the
 # container cannot bind ports below 1024, hence port 8080 rather than 80.

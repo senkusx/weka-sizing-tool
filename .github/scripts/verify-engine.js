@@ -12,7 +12,7 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.join(__dirname, '..', '..');
-for (const f of ['catalog.js', 'sizing.js']) {
+for (const f of ['catalog.js', 'sizing.js', 'compute-catalog.js', 'inference.js']) {
   vm.runInThisContext(fs.readFileSync(path.join(root, f), 'utf8'), { filename: f });
 }
 
@@ -105,6 +105,60 @@ console.log('\nEvery catalogued server model produces a valid design');
     }
   }
   console.log(`  ${bad ? 'FAIL' : 'PASS'}  ${Object.keys(SERVERS).length} models sized, ${bad} failure(s)`);
+  failures += bad;
+}
+
+console.log('\nInferX reference architecture — facility roll-up');
+{
+  // The 2 MW design: 128 B300 nodes. Every figure below is stated in the
+  // reference architecture's own elevations, so the model must reproduce them.
+  const air = sizeFacility({ gpuNodes: 128, nodeKey: 'smc-b300', coolingKey: 'air', profileKey: 'core', storageNodes: 24 });
+  const liq = sizeFacility({ gpuNodes: 128, nodeKey: 'smc-b300', coolingKey: 'liquid', profileKey: 'core', storageNodes: 24 });
+  check('128x B300 fleet power', air.power.gpuNodeW, 1779072, 0, ' W');
+  check('air-cooled compute racks', air.computeRacks, 64, 0);
+  check('air-cooled total racks', air.totalRacks, 68, 0);
+  check('liquid-cooled compute racks', liq.computeRacks, 16, 0);
+  // Elevation rack totals: air 2x13899+1188, liquid 8x13899+3000+1188.
+  const airRack = sizeFacility({ gpuNodes: 128, nodeKey: 'smc-b300', coolingKey: 'air', profileKey: 'edge', storageNodes: 0 });
+  const liqRack = sizeFacility({ gpuNodes: 128, nodeKey: 'smc-b300', coolingKey: 'liquid', profileKey: 'edge', storageNodes: 0 });
+  check('air compute rack (2 nodes + tier2)', airRack.power.perComputeRackW, 28986, 0, ' W');
+  check('liquid compute rack (8 nodes + CDU + tier2)', liqRack.power.perComputeRackW, 115380, 0, ' W');
+  const rtx = sizeFacility({ gpuNodes: 8, nodeKey: 'smc-rtx6000', coolingKey: 'air', profileKey: 'edge', storageNodes: 0 });
+  check('air RTX 6000 Pro rack (2 nodes + tier2)', rtx.power.perComputeRackW, 14246, 0, ' W');
+}
+
+console.log('\nInference engine — memory arithmetic');
+{
+  const m = MODELS['llama31-70b'];
+  // 70.6e9 params x 1 byte at FP8, x1.05 packing.
+  check('Llama 3.1 70B weights at FP8', weightBytes(m, PRECISIONS.fp8) / 1024 ** 3, 69.0, 0.5, ' GiB');
+  check('Llama 3.1 70B weights at FP16', weightBytes(m, PRECISIONS.fp16) / 1024 ** 3, 138.1, 0.5, ' GiB');
+  // 2 x 80 layers x 8 kv heads x 128 head_dim x 1 byte = 163840 B per token.
+  check('Llama 3.1 70B KV per token at FP8', kvBytesPerToken(m, PRECISIONS.fp8), 163840, 0, ' B');
+  // A 405B model at FP4 must fit one 288 GB B300; at FP16 it must not.
+  const tp4 = minTensorParallel({ model: MODELS['llama31-405b'], precision: PRECISIONS.fp4, gpu: GPUS.b300, gpusPerNode: 8, minKvGB: 8 });
+  const tp16 = minTensorParallel({ model: MODELS['llama31-405b'], precision: PRECISIONS.fp16, gpu: GPUS.b300, gpusPerNode: 8, minKvGB: 8 });
+  check('405B at FP4 fits one B300', tp4, 1, 0, ' GPU');
+  check('405B at FP16 needs 4 B300', tp16, 4, 0, ' GPUs');
+}
+
+console.log('\nInference engine — every model sizes on every node');
+{
+  let bad = 0;
+  for (const mk of Object.keys(MODELS)) {
+    for (const nk of Object.keys(GPU_NODES)) {
+      const r = sizeInference({
+        modelKey: mk, nodeKey: nk, precisionKey: 'fp8', promptTokens: 2048, outputTokens: 512,
+        concurrentRequests: 64, ttftTargetMs: 1000, tpotTargetMs: 50, tpOverride: null, customModel: null,
+      });
+      if (r.error) continue; // a legitimate "does not fit" answer, not a crash
+      const finite = [r.gpusDeployed, r.nodes, r.clusterTps, r.tpotMs, r.ttftMs, r.perGpuMemGB].every(Number.isFinite);
+      if (!finite || r.gpusDeployed < 1 || r.batch < 1) { console.log(`  FAIL  ${mk} on ${nk}`); bad++; }
+      if (r.perGpuMemGB > GPUS[GPU_NODES[nk].gpuKey].memGB * 1.001) { console.log(`  FAIL  ${mk} on ${nk} overcommits GPU memory (${r.perGpuMemGB.toFixed(0)} GB)`); bad++; }
+    }
+  }
+  const n = Object.keys(MODELS).length * Object.keys(GPU_NODES).length;
+  console.log(`  ${bad ? 'FAIL' : 'PASS'}  ${n} model/node combinations, ${bad} failure(s)`);
   failures += bad;
 }
 

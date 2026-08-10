@@ -1,9 +1,15 @@
-# WEKA Storage Sizing Tool
+# InferX Solution Sizing Tool
 
-A browser-based sizing calculator for WEKA storage clusters. Enter a usable-capacity
-and/or throughput target, pick a vendor platform, and it solves for the smallest
-compliant cluster — then shows the full BOM, capacity breakdown, memory budget,
-performance ceilings, and every constraint check it can derive from published docs.
+A browser-based sizing calculator for NCP-aligned AI infrastructure, covering both
+halves of the solution:
+
+- **Compute** (`compute.html`) — LLM inference sizing against the InferX reference
+  architecture: model, precision, concurrency and latency SLOs in; GPUs, nodes,
+  racks, power, weight, cooling load and fabric out.
+- **Storage** (`index.html`) — WEKA cluster sizing from a usable-capacity and/or
+  throughput target, with the full BOM, memory budget and constraint checks.
+- **Rack elevations** (`rack.html`) — to-scale front and rear views with fabric
+  cabling.
 
 ## Running it
 
@@ -72,6 +78,9 @@ leaves the browser, so it is safe to run on an internal network without egress.
 | `sizing.js` | Sizing engine — pure functions, no DOM |
 | `app.js` | Form wiring, rendering, charts, CSV export |
 | `rack.html` / `rack.css` / `rack.js` | Rack elevation page — front/rear views and fabric cabling |
+| `compute.html` / `compute-app.js` | Compute sizing page |
+| `compute-catalog.js` | GPUs, GPU nodes, fabric, rack rules and model catalog from the RA |
+| `inference.js` | Inference sizing engine — pure functions, no DOM |
 | `Dockerfile` / `nginx.conf` / `security-headers.conf` | Container image and web server config |
 | `docker-compose.yml` | One-command deployment |
 
@@ -92,6 +101,63 @@ disagreeing with the documentation it claims to implement.
 CI additionally builds the image and asserts that every asset is served, that a
 missing path returns 404, that security headers survive the per-location cache
 block, and that nginx is not running as root.
+
+## Compute sizing
+
+`compute.html` sizes GPU inference for the InferX reference architecture.
+
+**Reproduced exactly from the reference architecture** (these are regression-tested):
+
+| Check | Value |
+|---|---|
+| 128x B300 fleet power | 1,779,072 W |
+| Air-cooled compute rack (2 nodes + Tier 2) | 28,986 W |
+| Liquid-cooled compute rack (8 nodes + CDU + Tier 2) | 115,380 W |
+| Air-cooled RTX PRO 6000 rack (2 nodes + Tier 2) | 14,246 W |
+| 2 MW design, air-cooled | 64 compute racks, 68 total |
+| 2 MW design, liquid-cooled | 16 compute racks |
+
+The rack rule comes straight from the elevations: two GPU nodes per air-cooled
+rack, eight plus a 250 kW CDU per liquid-cooled rack. At 27.8 kW an air-cooled
+B300 rack sits well inside a 415 V/60 A 3-phase feed, so the two-node limit is a
+thermal and fabric choice rather than a power one.
+
+**Inference model.** Memory is exact arithmetic from the model architecture:
+
+```
+weights  = params x bytes_per_param x 1.05
+KV/token = 2 x layers x kv_heads x head_dim x bytes
+```
+
+Throughput is a roofline. Decode streams the active weights once per step plus
+the KV of every sequence in the batch, so
+
+```
+step_time    = (active_weights + batch x kv_per_seq) / effective_bandwidth
+per_user_tps = 1 / step_time
+cluster_tps  = batch / step_time
+```
+
+Per-user speed therefore falls as batch grows while aggregate throughput rises —
+the trade-off the TPOT service level pins down. Prefill is compute bound at
+2 FLOPs per active parameter per prompt token. MoE models keep every expert
+resident for capacity but only stream the active set, so `activeParams` drives
+throughput while `params` drives memory.
+
+**What is derived rather than read from the documents:**
+
+- **Fabric switch counts** follow the RA's oversubscription rules (east-west 1:1
+  non-blocking, north-south 4:1) with SN5610 cages treated as 2x400G because the
+  BOM specifies MMS4X00-NS twin-port transceivers. On the 2 MW design this derives
+  29 SN5610 against the 32 in the elevation, and 13 SN2201 against 12 — close, but
+  not a substitute for a real port map.
+- **Serving efficiency** — 80% of peak bandwidth in decode, 55% of dense peak in
+  prefill. These are the least-grounded numbers in the tool: they reflect typical
+  vLLM/TensorRT-LLM behaviour, not a benchmark of this architecture. Validate
+  throughput before committing to an SLA.
+- **H200 and L40S node power** is rolled up from BOM components rather than stated
+  as a total; their weights are estimates. B300 and RTX PRO 6000 node figures are
+  stated directly in the elevations.
 
 ## Rack elevations
 
@@ -166,5 +232,12 @@ the set is CPU-bound, so it is an upper bound rather than a fitted value.
 - [HPE Solutions with WEKA (QuickSpecs a00001270enw)](https://www.hpe.com/us/en/collaterals/collateral.a00001270enw.html)
 - [WEKA — Planning a WEKA system installation](https://docs.weka.io/planning-and-installation/bare-metal/planning-a-weka-system-installation)
 - [SPECstorage Solution 2020 published results](https://www.spec.org/storage2020/results/) — every submission cited in `SPEC_SUBMISSIONS` links to its own audited result page
+- InferX / Radian Arc reference architecture — platform model, the Regional/Core/Edge
+  elevations, and the 2 MW rack design template (per-node power, weight, BOM part
+  numbers, fabric topology and MEP responses)
+- [open-gpu-db](https://github.com/onepunk/open-gpu-db) (Apache-2.0) — GPU specifications;
+  its TDP figures independently confirm the RA BOM
+- [LLMcalc](https://github.com/kkpkishan/llm-infra-planner) (MIT) — memory and roofline formulas
+- [llmsizer](https://github.com/onepunk/llmsizer) (MIT) — quantisation-aware sizing and tensor-parallel scaling
 
 Confirm any committed design with WEKA and your hardware vendor before quoting.

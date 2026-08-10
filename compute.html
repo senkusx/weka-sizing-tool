@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InferX Compute Sizing</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <h1>InferX Compute Sizing</h1>
+    <span>GPU inference sizing for the NCP reference architecture</span>
+  </div>
+  <div class="topbar-actions">
+    <a class="btn" href="index.html">Storage</a>
+    <a class="btn" href="rack.html">Rack layout</a>
+    <button id="btn-theme" title="Toggle light / dark">Theme</button>
+    <button id="btn-csv">Export CSV</button>
+    <button id="btn-print" class="primary">Print / PDF</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <details class="group" open>
+      <summary>Deployment</summary>
+      <div class="group-body">
+        <div class="field">
+          <label for="profile">Federation tier</label>
+          <select id="profile"></select>
+          <span class="hint" id="profile-hint"></span>
+        </div>
+        <div class="field">
+          <label for="node">GPU compute node</label>
+          <select id="node"></select>
+          <span class="hint" id="node-hint"></span>
+        </div>
+        <div class="field">
+          <label for="cooling">Cooling</label>
+          <select id="cooling">
+            <option value="air">Air cooled — 2 nodes/rack</option>
+            <option value="liquid">Direct liquid cooled — 8 nodes/rack + CDU</option>
+          </select>
+        </div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Workload</summary>
+      <div class="group-body">
+        <div class="field">
+          <label for="model">Model</label>
+          <select id="model"></select>
+          <span class="hint" id="model-hint"></span>
+        </div>
+        <div class="field">
+          <label for="precision">Precision</label>
+          <select id="precision"></select>
+        </div>
+        <div class="field">
+          <label for="concurrent">Concurrent requests</label>
+          <input type="number" id="concurrent" min="1" max="100000" value="256">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="promptTokens">Prompt tokens</label>
+            <input type="number" id="promptTokens" min="1" max="1000000" value="2048">
+          </div>
+          <div class="field">
+            <label for="outputTokens">Output tokens</label>
+            <input type="number" id="outputTokens" min="1" max="1000000" value="512">
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Service level</summary>
+      <div class="group-body">
+        <div class="field">
+          <label for="tpot">Time per output token (TPOT) target</label>
+          <div class="range-row">
+            <input type="range" id="tpot" min="10" max="200" step="5" value="50">
+            <span class="range-val" id="tpot-val">50</span>
+          </div>
+          <span class="hint">Caps batch size. 50 ms is roughly 20 tokens/sec per user — comfortable for chat.</span>
+        </div>
+        <div class="field">
+          <label for="ttft">Time to first token (TTFT) target</label>
+          <div class="range-row">
+            <input type="range" id="ttft" min="100" max="5000" step="100" value="1000">
+            <span class="range-val" id="ttft-val">1000</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="tp">Tensor parallel width</label>
+          <select id="tp">
+            <option value="">Auto — smallest that fits</option>
+            <option value="1">1</option><option value="2">2</option>
+            <option value="4">4</option><option value="8">8</option>
+            <option value="16">16</option><option value="32">32</option>
+          </select>
+        </div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Storage</summary>
+      <div class="group-body">
+        <div class="field">
+          <label for="wekapods">WEKApod Nitro nodes</label>
+          <input type="number" id="wekapods" min="0" max="240" value="8">
+          <span class="hint">POSIX/S3/AI tier. 8 per the regional design, 24 in the 2 MW core design. Size capacity on the <a href="index.html">storage page</a>.</span>
+        </div>
+      </div>
+    </details>
+  </aside>
+
+  <main class="results" id="results"></main>
+</div>
+
+<script src="catalog.js"></script>
+<script src="compute-catalog.js"></script>
+<script src="inference.js"></script>
+<script src="compute-app.js"></script>
+</body>
+</html>
