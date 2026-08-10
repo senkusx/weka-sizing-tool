@@ -338,13 +338,51 @@ function sizeWekapod({ podKey, nodes, schemeId, hotSpares }) {
     notes.push({ level: 'warning', text: `WEKApod starts at ${pod.minNodes} nodes.` });
   }
 
+  // Where the raw capacity goes, in the order the formula applies it.
+  const afterSpare = rawTB * ((n - spares) / n);
+  const afterParity = afterSpare * scheme.efficiency;
+  const waterfall = [
+    { step: 'Raw installed', tb: rawTB, applied: `${n} nodes × ${pod.drives} × ${pod.driveTB} TB` },
+    { step: 'After hot-spare reserve', tb: afterSpare, applied: `× (${n} − ${spares}) / ${n}` },
+    { step: 'After parity', tb: afterParity, applied: `× ${scheme.d}/${scheme.stripe}  (${scheme.id})` },
+    { step: 'Net usable', tb: netTB, applied: `× ${WEKA.fsOverhead} filesystem overhead`, final: true },
+  ];
+  const split = {
+    net: netTB,
+    parity: afterSpare - afterParity,
+    spare: rawTB - afterSpare,
+    reserve: afterParity - netTB,
+  };
+
+  // Per-node budgets, using the same published formulas as the storage page.
+  const mem = memoryPerServer({
+    drivesPerNode: pod.drives, driveTB: pod.driveTB, frontendProcs: 2,
+    protocols: true, rdma: true, installedRamGB: pod.ramGB,
+  });
+  const ceiling = nodeThroughput({
+    drivesPerNode: pod.drives, drive: { tb: pod.driveTB, gbps: pod.driveGBs || 12 },
+    nic: { gb: pod.portGb, ports: 1 }, nicCount: pod.ports,
+    cores: pod.cores || 64, frontendProcs: 2, scheme,
+  });
+
+  // What the other protection schemes would give at this node count.
+  const alternatives = PROTECTION_SCHEMES
+    .filter((x) => x.stripe <= n)
+    .map((x) => ({
+      scheme: x,
+      netTB: rawTB * ((n - spares) / n) * x.efficiency * WEKA.fsOverhead,
+      current: x.id === scheme.id,
+    }));
+
   return {
     pod, scheme, spares, nodes: n,
-    rawTB, netTB,
+    rawTB, netTB, waterfall, split, mem, ceiling, alternatives,
     readGBs: n * pod.readGBs, writeGBs: n * pod.writeGBs,
     readIops: n * pod.readIops, writeIops: n * pod.writeIops,
     ru: n * pod.ru, watts: n * pod.watts, weightKg: n * pod.weightKg,
     ports: n * pod.ports, mgmtPorts: n * 2,
+    drives: n * pod.drives,
+    licenseTier: licenseTier(netTB),
     notes,
   };
 }

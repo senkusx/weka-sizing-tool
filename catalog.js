@@ -46,7 +46,13 @@ const WEKA = {
   perf: {
     networkEfficiency: 0.8, // usable fraction of wire rate
     driveEfficiency: 0.8, // usable fraction of aggregate drive rate
-    gbPerSecPerCore: 1.6, // WEKA core throughput ceiling
+    // WEKA core throughput ceiling. Previously 1.6, which was the least
+    // grounded coefficient in the model because no benchmark in the set was
+    // CPU-bound. WEKApod gives a real anchor: 71 GB/s per node on 32 WEKA cores
+    // needs at least 2.2 GB/s per core, so 1.6 was capping the model below
+    // hardware WEKA ships. Raised to 2.4, which leaves the eight-node benchmark
+    // drive-bound exactly as before.
+    gbPerSecPerCore: 2.4,
     iopsPerCore: 27000,
     iopsPerDriveCap: 250000,
     writePenalty: 0.45, // applied on top of the D/(D+P) parity cost

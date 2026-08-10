@@ -269,8 +269,17 @@ to detailed design.
 - **Power, rack space and switch counts** — typical figures per platform, not measured.
 
 Coefficients live in `WEKA.perf` in `catalog.js` if you want to retune them. The CPU
-term (`gbPerSecPerCore`) is the least constrained by published data — no benchmark in
-the set is CPU-bound, so it is an upper bound rather than a fitted value.
+term (`gbPerSecPerCore`) used to be the least constrained — no benchmark in the
+original set was CPU-bound. WEKApod supplies an anchor: 71 GB/s per node on 32 WEKA
+cores needs at least 2.2 GB/s per core, so the old 1.6 was capping the model below
+hardware WEKA ships. It is now 2.4, which leaves the eight-node benchmark drive-bound
+exactly as before and puts the modelled ceiling just above WEKA's real-world figure.
+
+## Styling
+
+The interface follows [Komodo](https://github.com/moghtech/komodo)'s visual language:
+Mantine's palette (`#0f1115` dark page, `#f8f9fa` light, `#228be6` accent), 8 px card
+and 4 px control radii, compact typography, and flat cards with hairline borders.
 
 ## Sources
 

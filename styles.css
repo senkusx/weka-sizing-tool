@@ -1,66 +1,75 @@
 :root {
   color-scheme: light;
-  --page: #f9f9f7;
-  --surface: #fcfcfb;
-  --surface-2: #f3f3f0;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted: #898781;
-  --border: rgba(11, 11, 11, 0.10);
-  --border-strong: #c3c2b7;
-  --grid: #e1e0d9;
+  --page: #f8f9fa;
+  --surface: #ffffff;
+  --surface-2: #f1f3f5;
+  --text-primary: #212529;
+  --text-secondary: #495057;
+  --text-muted: #868e96;
+  --border: #dee2e6;
+  --border-strong: #ced4da;
+  --grid: #e9ecef;
 
-  --series-1: #2a78d6;
-  --series-2: #eb6834;
-  --series-3: #1baf7a;
+  --series-1: #228be6;
+  --series-2: #fd7e14;
+  --series-3: #12b886;
 
-  --accent: #2a78d6;
+  --accent: #228be6;
   --accent-ink: #ffffff;
 
-  --good: #0ca30c;
-  --warning: #fab219;
-  --critical: #d03b3b;
-  --info: #2a78d6;
+  --good: #40c057;
+  --warning: #fab005;
+  --critical: #fa5252;
+  --info: #228be6;
 
-  --radius: 10px;
-  --radius-sm: 6px;
-  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius: 8px;
+  --radius-sm: 4px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --page: #0d0d0d;
-    --surface: #1a1a19;
-    --surface-2: #242422;
+    --page: #0f1115;
+    --surface: #1A1B1E;
+    --surface-2: #25262B;
     --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted: #898781;
-    --border: rgba(255, 255, 255, 0.10);
-    --border-strong: #383835;
-    --grid: #2c2c2a;
-    --series-1: #3987e5;
-    --series-2: #d95926;
-    --series-3: #199e70;
-    --accent: #3987e5;
+    --text-secondary: #C1C2C5;
+    --text-muted: #909296;
+    --border: #2C2E33;
+    --border-strong: #373A40;
+    --grid: #2C2E33;
+    --series-1: #339af0;
+    --series-2: #ff922b;
+    --series-3: #20c997;
+    --accent: #339af0;
+    --good: #51cf66;
+    --warning: #fcc419;
+    --critical: #ff6b6b;
+    --info: #339af0;
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page: #0d0d0d;
-  --surface: #1a1a19;
-  --surface-2: #242422;
+  --page: #0f1115;
+  --surface: #1A1B1E;
+  --surface-2: #25262B;
   --text-primary: #ffffff;
-  --text-secondary: #c3c2b7;
-  --text-muted: #898781;
-  --border: rgba(255, 255, 255, 0.10);
-  --border-strong: #383835;
-  --grid: #2c2c2a;
-  --series-1: #3987e5;
-  --series-2: #d95926;
-  --series-3: #199e70;
-  --accent: #3987e5;
+  --text-secondary: #C1C2C5;
+  --text-muted: #909296;
+  --border: #2C2E33;
+  --border-strong: #373A40;
+  --grid: #2C2E33;
+  --series-1: #339af0;
+  --series-2: #ff922b;
+  --series-3: #20c997;
+  --accent: #339af0;
+  --good: #51cf66;
+  --warning: #fcc419;
+  --critical: #ff6b6b;
+  --info: #339af0;
 }
 
 * { box-sizing: border-box; }

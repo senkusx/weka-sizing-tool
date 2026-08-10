@@ -214,6 +214,13 @@ console.log('\nWEKApod against WEKA published configurations');
   }
   console.log(`  ${bad ? 'FAIL' : 'PASS'}  ${Object.keys(WEKAPODS).length} WEKApod models size cleanly`);
   failures += bad;
+  // The per-core coefficient is now anchored on WEKApod: a peak-sequential
+  // ceiling must sit above WEKA's published real-world 71 GB/s per node, but
+  // not wildly above it.
+  const ratio = a.ceiling.read / a.pod.readGBs;
+  const ok = ratio >= 1 && ratio <= 1.3;
+  console.log(`  ${ok ? 'PASS' : 'FAIL'}  modelled ceiling ${a.ceiling.read.toFixed(1)} GB/s sits just above WEKA's 71 GB/s (${ratio.toFixed(2)}x)`);
+  if (!ok) failures++;
 }
 
 console.log('\nInference engine — memory arithmetic');

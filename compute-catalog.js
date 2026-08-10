@@ -162,7 +162,7 @@ const FABRIC_RULES = {
 const WEKAPODS = {
   'nitro-155': {
     family: 'Nitro', model: 'WPS155-SAE', label: 'WEKApod Nitro — 14 × 7.68 TB TLC',
-    ru: 1, drives: 14, driveTB: 7.68, driveType: 'E3.S TLC Gen5',
+    ru: 1, drives: 14, driveTB: 7.68, driveType: 'E3.S TLC Gen5', driveGBs: 14, cores: 64,
     cpu: 'AMD EPYC 9534 64C/128T', ramGB: 768, bootDesc: '2 × 960 GB BOSS',
     net: '2 × NVIDIA CX-7 400Gb OSFP', ports: 2, portGb: 400, mgmt: '2 × 1GbE',
     readGBs: 71, writeGBs: 32, readIops: 2.25e6, writeIops: 0.5875e6,
@@ -172,7 +172,7 @@ const WEKAPODS = {
   },
   'nitro-175': {
     family: 'Nitro', model: 'WPS175-SAE', label: 'WEKApod Nitro — 14 × 15.36 TB TLC',
-    ru: 1, drives: 14, driveTB: 15.36, driveType: 'E3.S TLC Gen5',
+    ru: 1, drives: 14, driveTB: 15.36, driveType: 'E3.S TLC Gen5', driveGBs: 14, cores: 64,
     cpu: 'AMD EPYC 9534 64C/128T', ramGB: 768, bootDesc: '2 × 960 GB BOSS',
     net: '2 × NVIDIA CX-7 400Gb OSFP', ports: 2, portGb: 400, mgmt: '2 × 1GbE',
     readGBs: 71, writeGBs: 32, readIops: 2.25e6, writeIops: 0.5875e6,
@@ -182,7 +182,7 @@ const WEKAPODS = {
   },
   'nitro-30': {
     family: 'Nitro', model: 'WEKApod Nitro 30TB', label: 'WEKApod Nitro — 14 × 30 TB TLC',
-    ru: 1, drives: 14, driveTB: 30, driveType: 'E3.S TLC Gen5',
+    ru: 1, drives: 14, driveTB: 30, driveType: 'E3.S TLC Gen5', driveGBs: 14, cores: 64,
     cpu: 'AMD EPYC 9534 64C/128T', ramGB: 768, bootDesc: '2 × 960 GB BOSS',
     net: '2 × NVIDIA CX-7 400Gb OSFP', ports: 2, portGb: 400, mgmt: '2 × 1GbE',
     readGBs: 71, writeGBs: 32, readIops: 2.25e6, writeIops: 0.5875e6,
@@ -191,7 +191,7 @@ const WEKAPODS = {
   },
   'prime-2118-30': {
     family: 'Prime', model: 'Prime 2118', label: 'WEKApod Prime 2118 — 18 × 30 TB eTLC',
-    ru: 1, drives: 18, driveTB: 30, driveType: 'E3.S eTLC', writeTier: '2 × 6.4 TB E3.S TLC',
+    ru: 1, drives: 18, driveTB: 30, driveType: 'E3.S eTLC', driveGBs: 12, cores: 128, writeTier: '2 × 6.4 TB E3.S TLC',
     cpu: '2 × Intel Sierra Forest 64C', ramGB: 1024, bootDesc: '2 × 960 GB BOSS',
     net: '2 × NVIDIA CX-7 400Gb OSFP', ports: 2, portGb: 400, mgmt: '2 × 1GbE',
     readGBs: 40, writeGBs: 20, readIops: 1.3e6, writeIops: 0.35e6,
@@ -200,7 +200,7 @@ const WEKAPODS = {
   },
   'prime-2118-60': {
     family: 'Prime', model: 'Prime 2118', label: 'WEKApod Prime 2118 — 18 × 60 TB eTLC',
-    ru: 1, drives: 18, driveTB: 60, driveType: 'E3.S eTLC', writeTier: '2 × 6.4 TB E3.S TLC',
+    ru: 1, drives: 18, driveTB: 60, driveType: 'E3.S eTLC', driveGBs: 12, cores: 128, writeTier: '2 × 6.4 TB E3.S TLC',
     cpu: '2 × Intel Sierra Forest 64C', ramGB: 1024, bootDesc: '2 × 960 GB BOSS',
     net: '2 × NVIDIA CX-7 400Gb OSFP', ports: 2, portGb: 400, mgmt: '2 × 1GbE',
     readGBs: 40, writeGBs: 20, readIops: 1.3e6, writeIops: 0.35e6,
@@ -209,7 +209,7 @@ const WEKAPODS = {
   },
   'prime-2218-60': {
     family: 'Prime', model: 'Prime 2218', label: 'WEKApod Prime 2218 — 18 × 60 TB QLC',
-    ru: 2, drives: 18, driveTB: 60, driveType: 'U.2 QLC', writeTier: '2 × 6.4 TB U.2 TLC',
+    ru: 2, drives: 18, driveTB: 60, driveType: 'U.2 QLC', driveGBs: 7, cores: 128, writeTier: '2 × 6.4 TB U.2 TLC',
     cpu: '2 × Intel Sierra Forest 64C', ramGB: 1024, bootDesc: '2 × 1.92 TB M.2',
     net: '2 × NVIDIA CX-7 400Gb OSFP', ports: 2, portGb: 400, mgmt: '2 × 1GbE',
     readGBs: 40, writeGBs: 20, readIops: 1.3e6, writeIops: 0.35e6,
@@ -218,7 +218,7 @@ const WEKAPODS = {
   },
   'prime-2218-120': {
     family: 'Prime', model: 'Prime 2218', label: 'WEKApod Prime 2218 — 18 × 120 TB QLC',
-    ru: 2, drives: 18, driveTB: 120, driveType: 'U.2 QLC', writeTier: '2 × 6.4 TB U.2 TLC',
+    ru: 2, drives: 18, driveTB: 120, driveType: 'U.2 QLC', driveGBs: 7, cores: 128, writeTier: '2 × 6.4 TB U.2 TLC',
     cpu: '2 × Intel Sierra Forest 64C', ramGB: 1024, bootDesc: '2 × 1.92 TB M.2',
     net: '2 × NVIDIA CX-7 400Gb OSFP', ports: 2, portGb: 400, mgmt: '2 × 1GbE',
     readGBs: 40, writeGBs: 20, readIops: 1.3e6, writeIops: 0.35e6,
