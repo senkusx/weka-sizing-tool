@@ -140,7 +140,13 @@ function sizeInference(input) {
   // whole nodes — GPUs are bought by the chassis, not individually.
   const replicas = Math.max(1, Math.ceil(input.concurrentRequests / batch));
   const gpusNeeded = replicas * tp;
-  const nodes = Math.ceil(gpusNeeded / node.gpuCount);
+  const autoNodes = Math.ceil(gpusNeeded / node.gpuCount);
+
+  // Capacity-led sizing: the buyer fixes the fleet and asks what it delivers,
+  // rather than stating a load and asking what it costs. Both directions matter
+  // — one answers "what do I need", the other "what will this carry".
+  const fixed = input.fixedNodes ? Math.max(1, Math.floor(input.fixedNodes)) : null;
+  const nodes = fixed || autoNodes;
   const gpusDeployed = nodes * node.gpuCount;
 
   // What the delivered hardware actually carries, which is usually more than
@@ -148,16 +154,30 @@ function sizeInference(input) {
   // another replica. Reporting only the requested figure would understate the
   // build and hide the rounding waste.
   const deployedReplicas = Math.floor(gpusDeployed / tp);
+  if (deployedReplicas < 1) {
+    return {
+      error: `${nodes} node(s) give ${gpusDeployed} GPUs, but ${model.label} at ${precision.label} needs ${tp} GPUs for a single replica. Add nodes, lower the precision, or pick a larger-memory accelerator.`,
+      model, precision, node, gpu,
+    };
+  }
   const deployedConcurrency = deployedReplicas * batch;
   const clusterTps = deployedReplicas * perf.clusterTps;
   const requestedTps = replicas * perf.clusterTps;
   const reqPerHour = input.outputTokens > 0 ? (clusterTps * 3600) / input.outputTokens : 0;
   const gpuUtilPct = (gpusNeeded / gpusDeployed) * 100;
 
-  if (gpusNeeded < gpusDeployed) {
+  const shortfall = fixed && deployedConcurrency < input.concurrentRequests;
+  if (shortfall) {
+    notes.push({
+      level: 'warning',
+      text: `${nodes} node(s) carry about ${deployedConcurrency.toLocaleString()} concurrent requests, short of the ${input.concurrentRequests.toLocaleString()} asked for. Meeting it needs ${autoNodes} nodes, or a looser TPOT target to raise batch size.`,
+    });
+  } else if (gpusNeeded < gpusDeployed) {
     notes.push({
       level: 'info',
-      text: `Rounding to whole nodes deploys ${gpusDeployed} GPUs where ${gpusNeeded} would serve the stated load. The spare capacity runs ${deployedReplicas - replicas} further replica(s), taking headroom to about ${deployedConcurrency.toLocaleString()} concurrent requests.`,
+      text: fixed
+        ? `${nodes} node(s) carry about ${deployedConcurrency.toLocaleString()} concurrent requests — ${(deployedConcurrency / Math.max(1, input.concurrentRequests)).toFixed(1)}x the stated load. ${autoNodes} node(s) would meet it exactly.`
+        : `Rounding to whole nodes deploys ${gpusDeployed} GPUs where ${gpusNeeded} would serve the stated load. The spare capacity runs ${deployedReplicas - replicas} further replica(s), taking headroom to about ${deployedConcurrency.toLocaleString()} concurrent requests.`,
     });
   }
 
@@ -184,6 +204,7 @@ function sizeInference(input) {
     model, precision, node, gpu, ctxTokens,
     tp, batch, batchLimit, memBatch, tpotBatch, replicas, deployedReplicas,
     gpusNeeded, gpusDeployed, nodes, gpuUtilPct, deployedConcurrency,
+    autoNodes, fixedNodes: fixed, shortfall,
     perUserTps: perf.perUserTps, tpotMs: perf.tpotMs, ttftMs,
     clusterTps, requestedTps, reqPerHour,
     perGpuMemGB, gpuMemGB: gpu.memGB,

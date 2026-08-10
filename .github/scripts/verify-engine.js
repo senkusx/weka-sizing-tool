@@ -164,6 +164,33 @@ console.log('\nInference engine — memory arithmetic');
   check('405B at FP16 needs 4 B300', tp16, 4, 0, ' GPUs');
 }
 
+console.log('\nCapacity-led sizing (fixed fleet)');
+{
+  const base = {
+    modelKey: 'llama31-70b', precisionKey: 'fp8', nodeKey: 'smc-b300',
+    promptTokens: 2048, outputTokens: 512, concurrentRequests: 5000,
+    ttftTargetMs: 1000, tpotTargetMs: 50, tpOverride: null, customModel: null,
+  };
+  const auto = sizeInference(base);
+  const two = sizeInference({ ...base, fixedNodes: 2 });
+  const sixteen = sizeInference({ ...base, fixedNodes: 16 });
+  const one = sizeInference({ ...base, fixedNodes: 1 });
+  check('fixed node count is honoured', sixteen.nodes, 16, 0, ' nodes');
+  check('GPUs follow the fixed fleet', sixteen.gpusDeployed, 128, 0, ' GPUs');
+  // Capacity must scale linearly with the fleet at constant batch.
+  check('8x the nodes carries 8x concurrency',
+    sixteen.deployedConcurrency / two.deployedConcurrency, 8, 0.01, 'x');
+  // An undersized fleet must say so rather than silently under-deliver.
+  console.log(`  ${one.shortfall ? 'PASS' : 'FAIL'}  1 node flags a shortfall against 5,000 concurrent`);
+  if (!one.shortfall) failures++;
+  console.log(`  ${!auto.shortfall ? 'PASS' : 'FAIL'}  workload-driven sizing never reports a shortfall`);
+  if (auto.shortfall) failures++;
+  // Fewer GPUs than the tensor-parallel width is an error, not a silent zero.
+  const tiny = sizeInference({ ...base, modelKey: 'llama31-405b', precisionKey: 'fp16', nodeKey: 'smc-l40s', fixedNodes: 1 });
+  console.log(`  ${tiny.error ? 'PASS' : 'FAIL'}  a fleet too small for one replica errors clearly`);
+  if (!tiny.error) failures++;
+}
+
 console.log('\nInference engine — every model sizes on every node');
 {
   let bad = 0;

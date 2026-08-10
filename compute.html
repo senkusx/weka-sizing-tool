@@ -45,6 +45,24 @@
             <option value="liquid">Direct liquid cooled — 8 nodes/rack + CDU</option>
           </select>
         </div>
+        <div class="field">
+          <label for="basis">Sizing basis</label>
+          <select id="basis">
+            <option value="workload">Workload-driven — solve for the fleet</option>
+            <option value="nodes">Fixed GPU node count</option>
+            <option value="racks">Fixed compute rack count</option>
+          </select>
+          <span class="hint" id="basis-hint"></span>
+        </div>
+        <div class="field" id="f-nodes" hidden>
+          <label for="fixedNodes">GPU nodes</label>
+          <input type="number" id="fixedNodes" min="1" max="4096" value="8">
+        </div>
+        <div class="field" id="f-racks" hidden>
+          <label for="fixedRacks">Compute racks</label>
+          <input type="number" id="fixedRacks" min="1" max="512" value="4">
+          <span class="hint" id="racks-hint"></span>
+        </div>
       </div>
     </details>
 

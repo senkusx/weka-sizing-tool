@@ -46,7 +46,15 @@ function computeAll() {
   FABRIC_RULES.northSouthOversub = +$w('w-ns').value;
   FABRIC_RULES.breakout = +$w('w-breakout').value;
 
+  // Sizing basis: solve for the fleet, or fix it and report what it delivers.
+  const basis = $w('w-basis').value;
+  const perRack = RACK.cooling[coolingKey].gpuNodesPerRack;
+  let fixedNodes = null;
+  if (basis === 'nodes') fixedNodes = Math.max(1, +$w('w-nodes').value || 1);
+  else if (basis === 'racks') fixedNodes = Math.max(1, +$w('w-racks').value || 1) * perRack;
+
   const inf = sizeInference({
+    fixedNodes,
     modelKey: $w('w-model').value,
     precisionKey: $w('w-precision').value,
     nodeKey,
@@ -100,7 +108,7 @@ function computeAll() {
   });
   const layout = buildRALayout(fac, { gpuNodes: inf.nodes });
 
-  return { inf, fac, layout, weka, stNodes, mode, nodeKey, coolingKey };
+  return { inf, fac, layout, weka, stNodes, mode, nodeKey, coolingKey, basis, perRack };
 }
 
 /* ---------- live strips under each step ---------- */
@@ -122,7 +130,8 @@ function renderLive() {
 
   $w('live-compute').innerHTML = tiles([
     [nfW(inf.gpusDeployed), `${inf.gpu.short} GPUs`],
-    [nfW(inf.nodes), 'GPU nodes'],
+    [nfW(inf.nodes), inf.fixedNodes ? 'GPU nodes (fixed)' : 'GPU nodes'],
+    [nfW(inf.deployedConcurrency), inf.shortfall ? 'Concurrency — SHORT' : 'Concurrency served'],
     [`${nfW(inf.perUserTps, 1)}<small>tok/s</small>`, 'Per user'],
     [`${bigW(inf.clusterTps)}<small>tok/s</small>`, 'Cluster throughput'],
     [`${nfW(inf.ttftMs, 0)}<small>ms</small>`, 'TTFT'],
@@ -289,6 +298,16 @@ function refresh() {
   $w('w-tpot-val').textContent = $w('w-tpot').value;
   $w('w-ttft-val').textContent = $w('w-ttft').value;
   $w('w-gbpergpu-val').textContent = $w('w-gbpergpu').value;
+
+  const basis = $w('w-basis').value;
+  $w('f-nodes').hidden = basis !== 'nodes';
+  $w('f-racks').hidden = basis !== 'racks';
+  $w('w-basis-hint').textContent = basis === 'workload'
+    ? 'Concurrency and the latency target decide how many nodes you need.'
+    : 'The fleet is fixed; the tool reports the concurrency and throughput it carries.';
+  const coolNow = $w('w-cooling').value;
+  const perRackNow = RACK.cooling[coolNow].gpuNodesPerRack;
+  $w('w-racks-hint').textContent = `${perRackNow} GPU nodes per ${coolNow === 'liquid' ? 'DLC' : 'air-cooled'} rack, so ${Math.max(1, +$w('w-racks').value || 1)} rack(s) = ${Math.max(1, +$w('w-racks').value || 1) * perRackNow} nodes.`;
 
   const mode = $w('w-stmode').value;
   $w('f-ratio').hidden = mode !== 'ratio';

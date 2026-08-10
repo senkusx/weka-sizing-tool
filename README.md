@@ -126,6 +126,16 @@ rack, eight plus a 250 kW CDU per liquid-cooled rack. At 27.8 kW an air-cooled
 B300 rack sits well inside a 415 V/60 A 3-phase feed, so the two-node limit is a
 thermal and fabric choice rather than a power one.
 
+**Sizing basis.** The tool works in both directions:
+
+- **Workload-driven** — state the concurrency and latency target, get the fleet.
+- **Fixed GPU nodes** — state the fleet, get the concurrency and throughput it carries.
+- **Fixed compute racks** — same, expressed in racks. Cooling decides the nodes per
+  rack (2 air, 8 DLC), so 8 racks is 16 nodes air-cooled and 64 liquid-cooled.
+
+Capacity-led sizing flags a shortfall when the fixed fleet cannot carry the stated
+load, and errors outright when it is too small to hold even one model replica.
+
 **Inference model.** Memory is exact arithmetic from the model architecture:
 
 ```

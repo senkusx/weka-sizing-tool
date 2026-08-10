@@ -36,6 +36,9 @@ function readInput() {
     ttftTargetMs: +$('ttft').value,
     tpOverride: $('tp').value ? +$('tp').value : null,
     wekapods: Math.max(0, +$('wekapods').value || 0),
+    basis: $('basis').value,
+    fixedNodesInput: Math.max(1, +$('fixedNodes').value || 1),
+    fixedRacksInput: Math.max(1, +$('fixedRacks').value || 1),
     customModel: null,
   };
 }
@@ -46,7 +49,11 @@ function heroCard(r, f) {
     <div class="hero">
       <div class="hero-figure">
         <div class="value">${nf(r.gpusDeployed)}</div>
-        <div class="label">${esc(r.gpu.short)} GPUs across ${nf(r.nodes)} node${r.nodes > 1 ? 's' : ''}</div>
+        <div class="label">${esc(r.gpu.short)} GPUs across ${nf(r.nodes)} node${r.nodes > 1 ? 's' : ''}${r.fixedNodes ? ' (fixed)' : ''}</div>
+      </div>
+      <div class="hero-figure">
+        <div class="value" style="${r.shortfall ? 'color:var(--warning)' : ''}">${nf(r.deployedConcurrency)}</div>
+        <div class="label">Concurrent requests carried${r.shortfall ? ' — short of target' : ''}</div>
       </div>
       <div class="hero-figure">
         <div class="value">${nf(f.totalRacks)}<span class="unit">racks</span></div>
@@ -236,6 +243,17 @@ function render() {
     ? 'Direct liquid cooled — 8 nodes/rack + CDU'
     : 'Direct liquid cooled — not available for this node';
   if (!node.liquidCapable && coolSel.value === 'liquid') coolSel.value = 'air';
+
+  // Sizing basis: solve for the fleet, or fix it and report what it carries.
+  $('f-nodes').hidden = input.basis !== 'nodes';
+  $('f-racks').hidden = input.basis !== 'racks';
+  const perRack = RACK.cooling[coolSel.value].gpuNodesPerRack;
+  $('basis-hint').textContent = input.basis === 'workload'
+    ? 'Concurrency and the latency target decide the node count.'
+    : 'The fleet is fixed; the tool reports what it carries.';
+  $('racks-hint').textContent = `${perRack} nodes per rack, so ${input.fixedRacksInput} rack(s) = ${input.fixedRacksInput * perRack} nodes.`;
+  input.fixedNodes = input.basis === 'nodes' ? input.fixedNodesInput
+    : input.basis === 'racks' ? input.fixedRacksInput * perRack : null;
 
   const r = sizeInference(input);
   if (r.error) {

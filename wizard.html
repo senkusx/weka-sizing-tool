@@ -44,6 +44,16 @@
         <div class="field"><label for="w-cooling">Cooling</label><select id="w-cooling">
           <option value="air">Air cooled</option><option value="liquid">Direct liquid cooled (DLC)</option>
         </select><span class="hint" id="w-cool-hint"></span></div>
+        <div class="field"><label for="w-basis">Sizing basis</label><select id="w-basis">
+          <option value="workload">Workload-driven — solve for the fleet</option>
+          <option value="nodes">Fixed GPU node count</option>
+          <option value="racks">Fixed compute rack count</option>
+        </select><span class="hint" id="w-basis-hint"></span></div>
+        <div class="field" id="f-nodes" hidden><label for="w-nodes">GPU nodes</label>
+          <input type="number" id="w-nodes" min="1" max="4096" value="8"></div>
+        <div class="field" id="f-racks" hidden><label for="w-racks">Compute racks</label>
+          <input type="number" id="w-racks" min="1" max="512" value="4">
+          <span class="hint" id="w-racks-hint"></span></div>
       </div>
       <div class="card">
         <h2>Workload</h2>
