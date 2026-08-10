@@ -22,7 +22,12 @@ window.RARack = (function () {
     r1: '#e8e8ea', r2: '#cfcfd3', rEdge: '#4d4d52',
     psu: '#f2f2f4', psuEdge: '#5a5a60', latch: '#b0316f',
     port: '#17171a', portEdge: '#2f2f34', card: '#f6f6f8',
-    green: '#35c759', amber: '#f0a020', nv: '#76b900', gold: '#9c7c2a', goldLit: '#b8952f',
+    green: '#35c759', amber: '#f0a020', nv: '#76b900',
+    // DGX livery from RA-11337-001 Fig 2.1: a large brushed gold panel with a
+    // lighter bezel, on a black chassis.
+    dgxGold: '#a98f5c', dgxGoldLo: '#8d7647', dgxBezel: '#c9b482',
+    // NVIDIA Spectrum switches ship in a tan/khaki chassis (Fig 4.6, Fig 4.10).
+    nvTan: '#c3b795', nvTanLo: '#a89c7c', nvTanEdge: '#6d6448',
     blank: '#33333a', blankEdge: '#26262b',
   };
 
@@ -46,6 +51,10 @@ window.RARack = (function () {
         <rect x="0.8" y="0.8" width="2.1" height="2.1" fill="#9a9aa1" rx="0.4"/></pattern>
       <pattern id="pd${uid}" width="4" height="4" patternUnits="userSpaceOnUse">
         <rect x="0.8" y="0.8" width="2.1" height="2.1" fill="#232326" rx="0.4"/></pattern>
+      <linearGradient id="gold${uid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${C.dgxBezel}"/><stop offset="0.45" stop-color="${C.dgxGold}"/><stop offset="1" stop-color="${C.dgxGoldLo}"/></linearGradient>
+      <linearGradient id="tan${uid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${C.nvTan}"/><stop offset="1" stop-color="${C.nvTanLo}"/></linearGradient>
       <pattern id="hc${uid}" width="7" height="6" patternUnits="userSpaceOnUse">
         <path d="M3.5 0 L7 1.7 L7 4.3 L3.5 6 L0 4.3 L0 1.7 Z" fill="none" stroke="#2a2a2e" stroke-width="0.6"/></pattern>
     </defs>`;
@@ -94,31 +103,116 @@ window.RARack = (function () {
     return s;
   }
 
-  /* DGX: NVIDIA's own livery — dark face, gold vent band, PSU bank on top. */
+  /* DGX B300 front, per RA-11337-001 Figure 2.1: a black chassis dominated by a
+     single large brushed-gold intake panel with a lighter bezel and the NVIDIA
+     wordmark low and centred, over a dark I/O band of module slots. Earlier
+     versions of this drawing used narrow bronze fins, which is the GB200 rack
+     look rather than the DGX B300 appliance. */
   function dgxFront(w, h, d, uid) {
-    let s = rect(0, 0, w, h, '#232326', '#121214', 2) + ears(w, h, true);
+    let s = rect(0, 0, w, h, '#1b1b1e', '#0c0c0e', 2);
+    // Black rack ears with corner fasteners, as in the figure.
+    s += rect(0, 0, G.EAR, h, '#232326', '#0c0c0e') + rect(w - G.EAR, 0, G.EAR, h, '#232326', '#0c0c0e');
+    [4, h - 4].forEach((cy) => {
+      s += circ(G.EAR / 2, cy, 1.6, '#3a3a40') + circ(w - G.EAR / 2, cy, 1.6, '#3a3a40');
+    });
+
+    const x0 = G.EAR + 7, x1 = w - G.EAR - 7, iw = x1 - x0;
+    // The gold panel takes the upper three quarters of the face.
+    const gy = 4, gh = h * 0.72;
+    s += rect(x0, gy, iw, gh, C.dgxBezel, '#6f5f38', 3);              // bezel
+    s += rect(x0 + 2.5, gy + 2.5, iw - 5, gh - 5, `url(#gold${uid})`, '#7a6740', 2);
+    // Brushed texture: fine vertical striations across the panel.
+    for (let i = 0; i < 60; i++) {
+      const fx = x0 + 4 + i * ((iw - 8) / 60);
+      s += `<line x1="${fx.toFixed(1)}" y1="${(gy + 4).toFixed(1)}" x2="${fx.toFixed(1)}" y2="${(gy + gh - 4).toFixed(1)}" stroke="#00000018" stroke-width="0.7"/>`;
+    }
+    // NVIDIA eye and wordmark, low centre.
+    const ly0 = gy + gh - 9, cx = x0 + iw / 2;
+    s += `<ellipse cx="${(cx - 17).toFixed(1)}" cy="${ly0.toFixed(1)}" rx="4.5" ry="3" fill="none" stroke="#4a3f22" stroke-width="1.1"/>`;
+    s += circ(cx - 17, ly0, 1.2, '#4a3f22');
+    s += text(cx + 3, ly0 + 2.6, 'NVIDIA', '#4a3f22', 7.5, 'middle', 700);
+
+    // Dark I/O band beneath: module slots with status LEDs.
+    const by = gy + gh + 3, bh = h - by - 4;
+    s += rect(x0, by, iw, bh, '#131315', '#08080a', 1.5);
+    s += circ(x0 + 5, by + bh / 2, 1.4, C.green);
+    const slots = 10, sp = (iw - 26) / slots;
+    for (let i = 0; i < slots; i++) {
+      s += rect(x0 + 11 + i * sp, by + 1.8, sp - 1.6, bh - 3.6, '#2b2b30', '#101012', 0.5);
+    }
+    s += rect(x1 - 12, by + 1.8, 10, bh - 3.6, '#2b2b30', '#101012', 0.5);
+    return s;
+  }
+
+  /* DGX B300 rear, per Figure 4.1: four compute OSFP at each top corner, a
+     mirrored pair of in-band management and storage QSFP clusters, BMC and LAN
+     RJ45, and module bays across the centre. */
+  function dgxRear(w, h, d, uid) {
+    let s = rect(0, 0, w, h, '#17171a', '#08080a', 2);
+    s += rect(0, 0, G.EAR, h, '#232326', '#0c0c0e') + rect(w - G.EAR, 0, G.EAR, h, '#232326', '#0c0c0e');
     const x0 = G.EAR + 6, x1 = w - G.EAR - 6, iw = x1 - x0;
-    // PSU bank across the top (12 x 3.3 kW on the real machine).
-    const psuH = h * 0.16;
+    const anchors = [];
+
+    // Compute fabric: 4x OSFP at each top corner.
+    const cageW = 15, gap = 2.5, groupW = 4 * cageW + 3 * gap;
+    [x0 + 2, x1 - groupW - 2].forEach((gx) => {
+      s += rect(gx - 2, 2.5, groupW + 4, 12, '#0f0f11', '#2e6b2e', 1);
+      for (let i = 0; i < 4; i++) {
+        const qx = gx + i * (cageW + gap);
+        s += rect(qx, 4, cageW, 9, C.port, '#3a3a40', 1);
+        s += rect(qx + 1.3, 5.6, cageW - 2.6, 5.8, '#26262b', '', 0.5);
+        anchors.push({ x: qx + cageW / 2, y: 8.5, fabric: 'ew' });
+      }
+    });
+
+    // Two mirrored I/O clusters: in-band management QSFP + storage QSFP.
+    const iy = h * 0.52;
+    [x0 + 4, x1 - 92].forEach((ix, side) => {
+      s += rect(ix, iy - 4, 9, 7.5, '#2f6f3f', '#3a3a40', 0.8);            // RJ45
+      for (let q = 0; q < 2; q++) {
+        const qx = ix + 13 + q * 17;
+        s += rect(qx, iy - 4.5, 15, 8.5, C.port, '#3a3a40', 1);
+        s += rect(qx + 1.3, iy - 3, 12.4, 5.5, '#26262b', '', 0.5);
+        anchors.push({ x: qx + 7.5, y: iy, fabric: 'ns' });
+      }
+      if (side === 1) {
+        s += rect(ix + 48, iy - 4, 9, 7.5, '#2f6f3f', '#3a3a40', 0.8);      // BMC
+        anchors.push({ x: ix + 52.5, y: iy, fabric: 'oob' });
+        s += rect(ix + 60, iy - 4, 9, 7.5, '#2f6f3f', '#3a3a40', 0.8);      // LAN
+      }
+    });
+
+    // Module bays across the centre.
+    const mx = x0 + 100, mw = x1 - 100 - mx;
+    if (mw > 40) {
+      s += rect(mx, iy - 7, mw, 15, '#101012', '#2a2a2e', 1);
+      const n = 6, sp = (mw - 4) / n;
+      for (let i = 0; i < n; i++) s += rect(mx + 2 + i * sp, iy - 5, sp - 2, 11, '#2b2b30', '#101012', 0.5);
+    }
+    s += text(x0 + 4, h - 3, 'DGX B300', '#6d6d75', 6.5, 'start', 600);
+    return { svg: s, anchors };
+  }
+
+  /* DGX power shelf, per Figure 2.2: six 5.5 kW supplies (33 kW) with a power
+     management board carrying the BMC port at the far left. */
+  function powerShelf(w, h, d, uid) {
+    let s = rect(0, 0, w, h, '#1b1b1e', '#0c0c0e', 1.5);
+    s += rect(0, 0, G.EAR, h, '#232326', '#0c0c0e') + rect(w - G.EAR, 0, G.EAR, h, '#232326', '#0c0c0e');
+    const x0 = G.EAR + 5, x1 = w - G.EAR - 5;
+    // Power management board with BMC RJ45.
+    s += rect(x0, 3, 26, h - 6, '#2b2b30', '#101012', 1);
+    s += rect(x0 + 4, h / 2 - 4, 10, 8, '#f2f2f4', '#3a3a40', 0.8);
+    s += circ(x0 + 20, h / 2 - 2, 1.2, C.green);
+    s += circ(x0 + 20, h / 2 + 2, 1.2, '#c03a3a');
+    // Six PSU modules.
+    const px0 = x0 + 30, pw = (x1 - px0) / 6;
     for (let i = 0; i < 6; i++) {
-      const pw = iw / 6 - 2;
-      s += rect(x0 + i * (iw / 6), 4, pw, psuH, '#3a3a40', '#17171a', 1);
-      s += rect(x0 + i * (iw / 6) + 2, 6, pw - 4, psuH - 4, `url(#pd${uid})`, '', 0.5);
+      const px = px0 + i * pw;
+      s += rect(px, 3, pw - 2, h - 6, '#232326', '#0e0e10', 1);
+      s += circ(px + 3.5, 6, 1.1, C.green);
+      s += rect(px + 6, 5, pw - 11, h - 10, `url(#pd${uid})`, '#141416', 0.5);
+      s += rect(px + pw - 5.5, 5, 2.6, h - 10, '#3a3a40', '', 0.5);   // handle
     }
-    // Bronze fin intake — the DGX signature. Narrow angled fins over a black
-    // recess rather than a solid band; the gaps are most of what you see.
-    const bandY = psuH + 8, bandH = h * 0.42;
-    s += rect(x0, bandY, iw, bandH, '#131315', '#0b0b0d', 1.5);
-    const fins = 34, pitch = (iw - 8) / fins;
-    for (let i = 0; i < fins; i++) {
-      const fx = x0 + 4 + i * pitch;
-      s += rect(fx, bandY + 3, Math.max(1.4, pitch * 0.42), bandH - 6, i % 2 ? C.gold : C.goldLit, '', 0.4);
-    }
-    // Lower I/O with NVMe and status.
-    const ly = bandY + bandH + 4, lh = h - ly - 5;
-    s += circ(x0 + 5, ly + lh / 2, 1.6, C.green);
-    s += driveRow(x0 + 12, ly, iw * 0.35, lh, 8, uid);
-    s += text(x1 - 4, ly + lh / 2 + 3, 'DGX', C.nv, 9, 'end', 700);
     return s;
   }
 
@@ -195,8 +289,9 @@ window.RARack = (function () {
 
   function switchFace(w, h, d, uid, rear) {
     if (!rear) {
-      // Port-side-exhaust switches face their ports to the rear.
-      let s = rect(0, 0, w, h, `url(#fg${uid})`, C.fEdge, 2) + ears(w, h, true);
+      // Port-side-exhaust switches face their ports to the rear. NVIDIA Spectrum
+      // switches ship in a tan chassis (RA Fig 4.6, Fig 4.10).
+      let s = rect(0, 0, w, h, `url(#tan${uid})`, C.nvTanEdge, 2) + ears(w, h, true);
       const x0 = G.EAR + 6, x1 = w - G.EAR - 6;
       for (let i = 0; i < 2; i++) s += rect(x0 + i * 54, 3, 50, h - 6, '#46464b', C.fEdge, 1) +
         rect(x0 + i * 54 + 3, 5, 44, h - 10, `url(#pd${uid})`, '', 0.6);
@@ -207,7 +302,8 @@ window.RARack = (function () {
       }
       return { svg: s, anchors: [] };
     }
-    let s = rect(0, 0, w, h, `url(#rg${uid})`, C.rEdge, 2) + ears(w, h, false);
+    let s = rect(0, 0, w, h, `url(#tan${uid})`, C.nvTanEdge, 2);
+    s += rect(0, 0, G.EAR, h, C.nvTan, C.nvTanEdge) + rect(w - G.EAR, 0, G.EAR, h, C.nvTan, C.nvTanEdge);
     const x0 = G.EAR + 5, x1 = w - G.EAR - 28;
     s += rect(x0, h / 2 - 4, 9, 7, '#2f6f3f', C.portEdge, 0.8);
     const px0 = x0 + 14, total = d.ports || 64;
@@ -222,7 +318,7 @@ window.RARack = (function () {
         anchors.push({ x: qx + cw / 2, y: qy + chh / 2 });
       }
     }
-    for (let i = 0; i < 2; i++) s += rect(x1 + 4, 4 + i * ((h - 8) / 2 + 0.5), 20, (h - 9) / 2, C.psu, C.psuEdge, 1);
+    for (let i = 0; i < 2; i++) s += rect(x1 + 4, 4 + i * ((h - 8) / 2 + 0.5), 20, (h - 9) / 2, C.nvTan, C.nvTanEdge, 1);
     return { svg: s, anchors };
   }
 
@@ -291,7 +387,8 @@ window.RARack = (function () {
       const y = G.TOP + (totalU - d.uTop) * G.U;
       const h = d.ru * G.U - 1.2;
       let inner = '', out = null;
-      if (d.type === 'dgx') inner = isRear ? (out = gpuRear(G.EQ_W, h, d, uid)).svg : dgxFront(G.EQ_W, h, d, uid);
+      if (d.type === 'dgx') inner = isRear ? (out = dgxRear(G.EQ_W, h, d, uid)).svg : dgxFront(G.EQ_W, h, d, uid);
+      else if (d.type === 'powershelf') inner = powerShelf(G.EQ_W, h, d, uid);
       else if (d.type === 'gpu') inner = isRear ? (out = gpuRear(G.EQ_W, h, d, uid)).svg : hgxFront(G.EQ_W, h, d, uid);
       else if (d.type === 'wekapod') inner = isRear ? (out = genericFace(G.EQ_W, h, d, uid, true)).svg : wekapodFront(G.EQ_W, h, d, uid);
       else if (d.type === 'switch') { out = switchFace(G.EQ_W, h, d, uid, isRear); inner = out.svg; }
